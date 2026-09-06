@@ -47,6 +47,31 @@ func (q Query) AddUserAuth(userId string) Query {
 	return q
 }
 
+func (q Query) AddOrganizationAuth(organizationId string) Query {
+
+	if len(q.Groups) > 0 {
+		for index, _ := range q.Groups {
+			q.Groups[index].Filters = append(q.Groups[index].Filters, Filter{
+				Key:      "organization_id",
+				Operator: "=",
+				Value:    organizationId,
+			})
+		}
+	} else {
+		q.Groups = append(q.Groups, Group{
+			Filters: []Filter{
+				{
+					Key:      "organization_id",
+					Operator: "=",
+					Value:    organizationId,
+				},
+			},
+		})
+	}
+
+	return q
+}
+
 func (q Query) AddEmailAuth(email string) Query {
 
 	if len(q.Groups) > 0 {

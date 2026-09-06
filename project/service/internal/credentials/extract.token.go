@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 func ExtractToken(ctx context.Context, tokenString string) (t Token, err error) {
@@ -26,20 +27,28 @@ func ExtractToken(ctx context.Context, tokenString string) (t Token, err error) 
 		return Token{}, errors.New("failed to read token claims")
 	}
 
-	var result Token
-	if claims["tokenKind"].(string) != "access" {
-		result = Token{
-			UserId:    claims["userId"].(string),
-			SessionId: claims["sessionId"].(string),
-			Email:     claims["email"].(string),
-			//CustomerId: claims["customerId"].(string),
-		}
-	} else {
-		result = Token{
-			UserId: claims["userId"].(string),
-			Email:  claims["email"].(string),
-			//CustomerId: claims["customerId"].(string),
-		}
+	userId, ok := claims["userId"].(string)
+	if !ok || userId == "" {
+		return Token{}, errors.New("token missing userId claim")
+	}
+
+	email, _ := claims["email"].(string)
+	sessionId, _ := claims["sessionId"].(string)
+	tokenKind, _ := claims["tokenKind"].(string)
+
+	result := Token{
+		UserId:    userId,
+		SessionId: sessionId,
+		Email:     email,
+		TokenKind: tokenKind,
+	}
+
+	if v, ok := claims["organizationId"].(string); ok {
+		result.OrganizationId = v
+	}
+
+	if v, ok := claims["accountType"].(float64); ok {
+		result.AccountType = int(v)
 	}
 
 	return result, nil

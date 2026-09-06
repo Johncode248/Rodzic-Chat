@@ -6,12 +6,16 @@ import (
 	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Password is capped at 72 bytes -- see the identical comment in
+// create.argument.go; Populate() below has the same silent-zero-value
+// footgun on a bcrypt error, so validation here is the real guard.
 type UpdateArgument struct {
 	Query    databasepg.Query `json:"query,omitempty"`
-	Password *string          `json:"password,omitempty"`
+	Password *string          `json:"password,omitempty" validate:"omitempty,max=72"`
 }
 
 func (a UpdateArgument) Populate(credential Credential) Credential {

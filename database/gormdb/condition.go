@@ -21,6 +21,15 @@ func makeCondition(ctx context.Context, query databasepg.Query) *gorm.DB {
 		var andValues []interface{}
 
 		for _, f := range group.Filters {
+			// "IS NOT"/"IS" with a nil Value means a literal NULL check
+			// (e.g. {Key: "deleted_at", Operator: "IS NOT", Value: nil} ->
+			// "deleted_at IS NOT NULL") -- these have no bound parameter,
+			// unlike every other operator here.
+			if (f.Operator == "IS NOT" || f.Operator == "IS") && f.Value == nil {
+				andConditions = append(andConditions, fmt.Sprintf("%s %s NULL", f.Key, f.Operator))
+				continue
+			}
+
 			cond := fmt.Sprintf("%s %s ?", f.Key, f.Operator)
 			andConditions = append(andConditions, cond)
 			andValues = append(andValues, f.Value)

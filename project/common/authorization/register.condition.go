@@ -1,12 +1,14 @@
 package authorizationpg
 
 import (
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	credentialspg "github.com/Johncode248/Rodzic-Chat/project/common/credentials"
-	userspg "github.com/Johncode248/Rodzic-Chat/project/common/users"
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
 )
 
 type RegisterCondition struct {
-	User         userspg.User
+	Account      accountspg.Account
+	Organization organizationspg.Organization
 	Credential   credentialspg.Credential
 	AccessToken  string
 	RefreshToken string

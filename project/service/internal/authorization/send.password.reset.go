@@ -5,22 +5,30 @@ import (
 	"errors"
 	"fmt"
 	"net/smtp"
+	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/Johncode248/Rodzic-Chat/library/random"
 	"github.com/Johncode248/Rodzic-Chat/logger"
-	userspg "github.com/Johncode248/Rodzic-Chat/project/common/users"
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
+	passwordresetspg "github.com/Johncode248/Rodzic-Chat/project/common/passwordresets"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/credentials"
-	"github.com/Johncode248/Rodzic-Chat/project/service/internal/users"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/passwordresets"
 	"github.com/Johncode248/Rodzic-Chat/variables"
 )
+
+// passwordResetTokenTTL matches the "ważny przez 1 godzinę" promised in the
+// email body below -- keep both in sync if either changes.
+const passwordResetTokenTTL = 1 * time.Hour
 
 func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
 	ctx = logger.Enter(ctx, "authorization.SendPasswordResetEmail", toEmail)
 	defer logger.Exit(ctx, "authorization.SendPasswordResetEmail", &err)
 
-	host, port, login, password, from := "smtp-relay.brevo.com", "587", "b09c81001@smtp-brevo.com", "xsmtpsib-ff275231bad30737cd02924872278bab84be0b51d42616850de032457e899e52-yLTKD1FUsS27PERo", "noreply@dom2sky.pl"
+	host, port, login, password, from := variables.SMTPHost, variables.SMTPPort, variables.SMTPLogin, variables.SMTPPassword, variables.SMTPFrom
 
-	userlist, err := users.Select(ctx, userspg.SelectArgument{Query: databasepg.Query{
+	accountlist, err := accounts.Select(ctx, accountspg.SelectArgument{Query: databasepg.Query{
 		Limit: 1,
 		Groups: []databasepg.Group{
 			{
@@ -38,16 +46,21 @@ func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
 		return err
 	}
 
-	if len(userlist.Users) == 0 {
-		return errors.New("no users found")
+	if len(accountlist.Accounts) == 0 {
+		return errors.New("no accounts found")
 	}
 
-	accessToken, err := credentials.GenerateAccessToken(ctx, userlist.Users[0].Id, toEmail)
-	if err != nil {
+	rawToken := random.GenerateToken()
+
+	if _, err = passwordresets.Create(ctx, passwordresetspg.CreateArgument{
+		AccountId: accountlist.Accounts[0].Id,
+		TokenHash: credentials.HashToken(rawToken),
+		ExpiresAt: time.Now().Add(passwordResetTokenTTL),
+	}); err != nil {
 		return err
 	}
 
-	resetLink := fmt.Sprintf("%s/password-reset?access_token=%s", variables.DOMEIN_F, accessToken)
+	resetLink := fmt.Sprintf("%s/password-reset?token=%s", variables.DOMEIN_F, rawToken)
 
 	subject := "Resetowanie hasła 🔒"
 	body := fmt.Sprintf(`<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">

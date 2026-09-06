@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	"github.com/minio/minio-go/v7"
 )
 
 func DeleteFile(ctx context.Context, bucketName, objectName string) (err error) {

@@ -8,8 +8,12 @@ import (
 )
 
 type LoginArgument struct {
-	Email    string `validate:"required,email,max=128"`
-	Password string `validate:"required,min=6"`
+	Login      string `validate:"required,max=128"`
+	Password   string `validate:"required,min=6"`
+	DeviceId   string
+	DeviceName string
+	UserAgent  string
+	IpAddress  string
 }
 
 func (a LoginArgument) Validate() error {

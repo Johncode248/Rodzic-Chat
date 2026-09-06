@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/go-playground/validator/v10"
 )
 
 type DeleteArgument struct {
