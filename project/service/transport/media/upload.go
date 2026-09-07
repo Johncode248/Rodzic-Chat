@@ -56,11 +56,13 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// General gallery photos (no event_id) stay open to any org member;
-	// only staff may attach a file to a specific Event -- per product
-	// decision, this is how consent-document uploads are restricted
-	// without a parallel "document" concept.
-	if r.FormValue("event_id") != "" {
+	// General gallery photos (no event_id, no category) stay open to any
+	// org member; only staff may attach a file to a specific Event, or
+	// upload a categorized document (e.g. "schedule" / "meal_plan") --
+	// per product decision, this is how consent-document and
+	// plan-zajęć/plan-obiadowy uploads are restricted without a parallel
+	// "document" concept.
+	if r.FormValue("event_id") != "" || r.FormValue("category") != "" {
 		accountType, err := credentials.GetAccountTypeFromContext(ctx)
 		isStaff := err == nil && (accountType == accountspg.AccountTypeDirector.Ordinal() ||
 			accountType == accountspg.AccountTypeCoDirector.Ordinal() ||
@@ -95,6 +97,7 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 		OriginalFilename: header.Filename,
 		ContentType:      contentType,
 		Caption:          r.FormValue("caption"),
+		Category:         r.FormValue("category"),
 	})
 	if err != nil {
 		_ = api_bucket.DeleteFile(ctx, bucketName, objectKey)

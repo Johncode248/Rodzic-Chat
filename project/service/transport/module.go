@@ -18,14 +18,21 @@ import (
 	eventsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/events"
 	featuresgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/features"
 	groupsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/groups"
+	groupteachersgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/groupteachers"
 	guardianclaimsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/guardianclaims"
 	mealsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/meals"
 	mediagt "github.com/Johncode248/Rodzic-Chat/project/service/transport/media"
 	organizationsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/organizations"
+	organizationstripeaccountsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/organizationstripeaccounts"
 	parentchildgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/parentchild"
+	paymentsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/payments"
+	platformsettingsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/platformsettings"
 	registrationlinksgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/registrationlinks"
+	stripewebhookgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/stripewebhook"
 	teacherinvitesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/teacherinvites"
+	"github.com/Johncode248/Rodzic-Chat/variables"
 	"github.com/gorilla/mux"
+	"github.com/stripe/stripe-go/v81"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
@@ -39,6 +46,11 @@ func Start() {
 	api_bucket.Init()
 	internal.Init()
 	initTracer()
+
+	// variables.STRIPESecret (like JWTSecret/SMTP*) is a mustEnv() --
+	// missing STRIPE_SECRET_KEY now fails fast at boot rather than letting
+	// every Stripe call fail one at a time later.
+	stripe.Key = variables.STRIPESecret
 
 	router := mux.NewRouter()
 
@@ -68,6 +80,25 @@ func Start() {
 
 	router.HandleFunc("/login/callback", authgt.GoogleCallbackLoginHandler)
 	router.HandleFunc("/register/callback", authgt.GoogleCallbackRegisterHandler)
+
+	// Stripe calls this directly (no JWT, no session) -- authenticated by
+	// verifying the Stripe-Signature header instead. Configure this URL
+	// (<DOMEIN_B>/public/stripe/webhook) in the Stripe Dashboard once real
+	// keys are in place.
+	public.HandleFunc("/stripe/webhook", stripewebhookgt.Webhook).Methods("POST")
+
+	// Platform-wide fee settings (project/common/platformsettings) -- no
+	// org, no JWT; gated by its own shared-secret check (see
+	// transport/platformsettings/helpers.go), so it's mounted under
+	// /public rather than /private on purpose.
+	public.HandleFunc("/platform/settings", platformsettingsgt.Select).Methods("GET")
+	public.HandleFunc("/platform/settings", platformsettingsgt.Update).Methods("PATCH")
+
+	// Exempting one organization from the platform subscription fee --
+	// same shared-secret gate as platform/settings above (see
+	// transport/organizations/subscription.override.go), never reachable
+	// by a director's own JWT.
+	public.HandleFunc("/organizations/subscription-override", organizationsgt.SetSubscriptionOverride).Methods("PATCH")
 
 	private.Use(credentials.AuthMiddleware)
 
@@ -133,6 +164,11 @@ func Start() {
 	private.Handle("/organizations", organizationsDirectorOnly(http.HandlerFunc(organizationsgt.Update))).Methods("PATCH")
 	private.Handle("/organizations", organizationsDirectorOnly(http.HandlerFunc(organizationsgt.Delete))).Methods("DELETE")
 
+	// Platform subscription billing: bank account + this organization's own
+	// transfer-title reference + price computed from its ChildrenLimit tier
+	// (see project/common/organizations/pricing.go). Director-only.
+	private.Handle("/organizations/billing", organizationsDirectorOnly(http.HandlerFunc(organizationsgt.Billing))).Methods("GET")
+
 	// Multi-facility account model: a parent can belong to several
 	// organizations at once (see project/common/accountorganizations).
 	private.HandleFunc("/organizations/mine", organizationsgt.Mine).Methods("GET")
@@ -161,6 +197,24 @@ func Start() {
 	private.HandleFunc("/groups", groupsgt.Select).Methods("GET")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Update))).Methods("PATCH")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Delete))).Methods("DELETE")
+
+	// Payments: director/co-director create/edit/reconcile; any org member
+	// can list (a parent only ever sees their own, see paymentsgt.Select).
+	// Checkout isn't staff-gated -- it's implicitly scoped to "your own
+	// assigned payment" inside payments.CreateCheckoutSession.
+	paymentsFeature := credentials.RequireFeature(featurespg.FeaturePayments)
+	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Create)))).Methods("POST")
+	private.Handle("/payments", paymentsFeature(http.HandlerFunc(paymentsgt.Select))).Methods("GET")
+	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Update)))).Methods("PATCH")
+	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Delete)))).Methods("DELETE")
+	private.Handle("/payments/checkout", paymentsFeature(http.HandlerFunc(paymentsgt.Checkout))).Methods("POST")
+
+	private.Handle("/organizations/stripe/onboarding-link", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(organizationstripeaccountsgt.OnboardingLink)))).Methods("POST")
+	private.Handle("/organizations/stripe/status", paymentsFeature(http.HandlerFunc(organizationstripeaccountsgt.Status))).Methods("GET")
+
+	private.Handle("/group-teachers", staffOnly(http.HandlerFunc(groupteachersgt.Create))).Methods("POST")
+	private.HandleFunc("/group-teachers", groupteachersgt.Select).Methods("GET")
+	private.Handle("/group-teachers", staffOnly(http.HandlerFunc(groupteachersgt.Delete))).Methods("DELETE")
 
 	// Parent-child links: any authenticated org member may create/read/delete
 	// (a parent registering their own child, or staff managing enrollments);

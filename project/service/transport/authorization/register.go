@@ -25,13 +25,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	defer logger.Exit(ctx, "authgt.Register", &res, &err)
 
 	result, err := authorization.Register(ctx, authorizationpg.RegisterArgument{
-		Name:                  request.Name,
-		Email:                 request.Email,
-		Phone:                 request.Phone,
-		Password:              request.Password,
-		OrganizationName:      request.OrganizationName,
-		OrganizationType:      request.OrganizationType,
-		OrganizationSubdomain: request.OrganizationSubdomain,
+		Name:                      request.Name,
+		Email:                     request.Email,
+		Phone:                     request.Phone,
+		Password:                  request.Password,
+		OrganizationName:          request.OrganizationName,
+		OrganizationType:          request.OrganizationType,
+		OrganizationSubdomain:     request.OrganizationSubdomain,
+		OrganizationChildrenLimit: request.OrganizationChildrenLimit,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

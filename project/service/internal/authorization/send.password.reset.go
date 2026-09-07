@@ -67,7 +67,7 @@ func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
     <div style="padding: 30px; background-color: #f9f9f9; border-radius: 10px;">
         <h2 style="color: #1f2937; text-align: center; margin-bottom: 25px;">Resetowanie hasła</h2>
 
-        <p style="margin-bottom: 20px;">Otrzymaliśmy prośbę o zresetowanie hasła do Twojego konta w serwisie Dom2sky.pl. Jeśli to nie Ty wysłałeś/aś tę prośbę, zignoruj tę wiadomość — Twoje hasło pozostanie bez zmian.</p>
+        <p style="margin-bottom: 20px;">Otrzymaliśmy prośbę o zresetowanie hasła do Twojego konta w serwisie Rodzic Chat. Jeśli to nie Ty wysłałeś/aś tę prośbę, zignoruj tę wiadomość — Twoje hasło pozostanie bez zmian.</p>
 
         <p style="margin-bottom: 30px;">Aby ustawić nowe hasło, kliknij w poniższy przycisk (link jest ważny przez 1 godzinę):</p>
 
@@ -86,13 +86,13 @@ func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
 
         <p>
             Pozdrawiamy,<br>
-            <strong>Zespół Dom2sky.pl</strong>
+            <strong>Zespół Rodzic Chat</strong>
         </p>
 
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 14px;">
-            <p style="margin: 5px 0;">© 2026 Dom2sky.pl. Wszystkie prawa zastrzeżone.</p>
+            <p style="margin: 5px 0;">© 2026 Rodzic Chat. Wszystkie prawa zastrzeżone.</p>
             <p style="margin: 5px 0;">Bezpieczeństwo Twojego konta jest dla nas priorytetem. Ten link wygaśnie za 1 godzinę.</p>
-            <p style="margin: 5px 0; font-size: 12px;">Jeśli nie rozpoznajesz tej aktywności, <a href="mailto:stanislaw@dom2sky.pl" style="color: #0ea5e9;">skontaktuj się z nami</a>.</p>
+            <p style="margin: 5px 0; font-size: 12px;">Jeśli nie rozpoznajesz tej aktywności, <a href="mailto:kontakt@rodzicchat.pl" style="color: #0ea5e9;">skontaktuj się z nami</a>.</p>
         </div>
     </div>
 </div>`, resetLink, resetLink, resetLink)

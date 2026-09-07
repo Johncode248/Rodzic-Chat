@@ -11,6 +11,11 @@ const loginCharset = "abcdefghijklmnopqrstuvwxyz0123456789"
 const passwordCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const tokenCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// paymentReferenceCharset excludes visually-confusable characters (0/O,
+// 1/I/L) since this code is meant to be read off a screen and typed by hand
+// into a banking app's transfer title.
+const paymentReferenceCharset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
 func randomString(charset string, length int) string {
 	var sb strings.Builder
 	for i := 0; i < length; i++ {
@@ -46,6 +51,16 @@ func GeneratePassword() string {
 // brute-forceable before a link's own expiry.
 func GenerateToken() string {
 	return randomString(tokenCharset, 32)
+}
+
+// GeneratePaymentReference returns a short, unambiguous code (e.g.
+// "RC-7F3K9Q") for a director to use as their platform-subscription bank
+// transfer's title, so the operator can match an incoming transfer to the
+// right organization by hand. Generated once per organization; not meant to
+// be secret (a 32-symbol alphabet at length 6 is plenty to avoid accidental
+// collisions between organizations, not to resist guessing).
+func GeneratePaymentReference() string {
+	return "RC-" + randomString(paymentReferenceCharset, 6)
 }
 
 // slugify keeps ASCII letters/digits and collapses whitespace into dots.

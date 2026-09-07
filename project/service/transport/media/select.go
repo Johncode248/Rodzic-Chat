@@ -20,7 +20,13 @@ type SelectResponse struct {
 }
 
 // Select lists gallery media in the caller's organization, optionally
-// filtered by ?event_id= or ?group_id=.
+// filtered by ?event_id= and/or ?group_id=. When ?group_id= is given
+// without ?event_id= (the general-gallery case -- a parent browsing their
+// child's group), org-wide items (no group_id of their own, e.g. a
+// placówka-wide "plan obiadowy") are included alongside that group's items,
+// since both are meant to be visible to that parent. An ?event_id= query
+// stays an exact match regardless of ?group_id=, since a consent file is
+// tied to one specific event, not an audience.
 func Select(w http.ResponseWriter, r *http.Request) {
 	var (
 		res SelectResponse
@@ -36,20 +42,28 @@ func Select(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := databasepg.Query{
-		Groups: []databasepg.Group{{}},
-	}
+	eventId := r.URL.Query().Get("event_id")
+	groupId := r.URL.Query().Get("group_id")
 
-	if eventId := r.URL.Query().Get("event_id"); eventId != "" {
-		query.Groups[0].Filters = append(query.Groups[0].Filters, databasepg.Filter{
-			Key: "event_id", Operator: "=", Value: eventId,
-		})
-	}
+	var query databasepg.Query
 
-	if groupId := r.URL.Query().Get("group_id"); groupId != "" {
-		query.Groups[0].Filters = append(query.Groups[0].Filters, databasepg.Filter{
-			Key: "group_id", Operator: "=", Value: groupId,
-		})
+	if groupId != "" && eventId == "" {
+		query.Groups = []databasepg.Group{
+			{Filters: []databasepg.Filter{{Key: "group_id", Operator: "=", Value: groupId}}},
+			{Filters: []databasepg.Filter{{Key: "group_id", Operator: "=", Value: ""}, {Key: "event_id", Operator: "=", Value: ""}}},
+		}
+	} else {
+		query.Groups = []databasepg.Group{{}}
+		if eventId != "" {
+			query.Groups[0].Filters = append(query.Groups[0].Filters, databasepg.Filter{
+				Key: "event_id", Operator: "=", Value: eventId,
+			})
+		}
+		if groupId != "" {
+			query.Groups[0].Filters = append(query.Groups[0].Filters, databasepg.Filter{
+				Key: "group_id", Operator: "=", Value: groupId,
+			})
+		}
 	}
 
 	query = query.AddOrganizationAuth(organizationId)

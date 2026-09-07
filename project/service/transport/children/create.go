@@ -2,6 +2,7 @@ package childrengt
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
@@ -40,6 +41,10 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		Notes:          request.Notes,
 	})
 	if err != nil {
+		if errors.Is(err, children.ErrChildrenLimitReached) {
+			http.Error(w, err.Error(), http.StatusPaymentRequired)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

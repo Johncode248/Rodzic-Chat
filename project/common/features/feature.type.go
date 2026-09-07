@@ -10,6 +10,7 @@ const (
 	FeatureEvents
 	FeatureGallery
 	FeatureMealCancellations
+	FeaturePayments
 )
 
 func (f Feature) String() string {
@@ -26,6 +27,8 @@ func (f Feature) String() string {
 		return "Gallery"
 	case FeatureMealCancellations:
 		return "MealCancellations"
+	case FeaturePayments:
+		return "Payments"
 	default:
 		return "Unknown"
 	}
@@ -45,5 +48,6 @@ func AllFeatures() []Feature {
 		FeatureEvents,
 		FeatureGallery,
 		FeatureMealCancellations,
+		FeaturePayments,
 	}
 }

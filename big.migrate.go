@@ -13,12 +13,16 @@ import (
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
 	featurespg "github.com/Johncode248/Rodzic-Chat/project/common/features"
 	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
+	groupteacherspg "github.com/Johncode248/Rodzic-Chat/project/common/groupteachers"
 	guardianclaimspg "github.com/Johncode248/Rodzic-Chat/project/common/guardianclaims"
 	mealspg "github.com/Johncode248/Rodzic-Chat/project/common/meals"
 	mediapg "github.com/Johncode248/Rodzic-Chat/project/common/media"
 	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+	organizationstripeaccountspg "github.com/Johncode248/Rodzic-Chat/project/common/organizationstripeaccounts"
 	parentchildpg "github.com/Johncode248/Rodzic-Chat/project/common/parentchild"
 	passwordresetspg "github.com/Johncode248/Rodzic-Chat/project/common/passwordresets"
+	paymentspg "github.com/Johncode248/Rodzic-Chat/project/common/payments"
+	platformsettingspg "github.com/Johncode248/Rodzic-Chat/project/common/platformsettings"
 	registrationlinkspg "github.com/Johncode248/Rodzic-Chat/project/common/registrationlinks"
 	sessionspg "github.com/Johncode248/Rodzic-Chat/project/common/sessions"
 	teacherinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/teacherinvites"
@@ -59,6 +63,10 @@ func BigMigrate() {
 	}
 
 	if err := gormdb.Migrate(context.Background(), groupspg.Group{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), groupteacherspg.GroupTeacher{}); err != nil {
 		panic(err)
 	}
 
@@ -123,6 +131,18 @@ func BigMigrate() {
 	}
 
 	if err := gormdb.Migrate(context.Background(), teacherinvitespg.TeacherInvite{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), platformsettingspg.PlatformSettings{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), organizationstripeaccountspg.OrganizationStripeAccount{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), paymentspg.Payment{}); err != nil {
 		panic(err)
 	}
 

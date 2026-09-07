@@ -2,11 +2,22 @@ package organizations
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
 )
+
+// ErrChildrenLimitBelowCurrentCount means the requested ChildrenLimit is
+// lower than how many children the organization already has -- shrinking
+// the plan would immediately put them over their own new limit, which
+// would then block adding any further child (see
+// project/service/internal/children.ValidateCreateMutation) with a
+// confusing "limit reached" message despite them just having lowered it
+// themselves.
+var ErrChildrenLimitBelowCurrentCount = errors.New("children limit cannot be set below the organization's current number of children")
 
 func Update(ctx context.Context, argument organizationspg.UpdateArgument) (res organizationspg.UpdateResponse, err error) {
 	ctx = logger.Enter(ctx, "organizations.Update", argument)
@@ -56,7 +67,19 @@ func InitiateUpdateMutation(ctx context.Context, mutation *organizationspg.Updat
 		return nil
 	}
 
-	updateOrganization := mutation.Foundation.Populate(result.Organizations[0])
+	current := result.Organizations[0]
+
+	if mutation.Foundation.ChildrenLimit != nil && *mutation.Foundation.ChildrenLimit < current.ChildrenLimit {
+		count, countErr := children.CountForOrganization(ctx, current.Id)
+		if countErr != nil {
+			return countErr
+		}
+		if *mutation.Foundation.ChildrenLimit < count {
+			return ErrChildrenLimitBelowCurrentCount
+		}
+	}
+
+	updateOrganization := mutation.Foundation.Populate(current)
 
 	mutation.Transient = organizationspg.Transient{
 		Current: result.Organizations[0],

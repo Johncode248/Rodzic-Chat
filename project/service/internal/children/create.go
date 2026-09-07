@@ -2,13 +2,23 @@ package children
 
 import (
 	"context"
+	"errors"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
 )
+
+// ErrChildrenLimitReached means the organization's ChildrenLimit (its paid
+// capacity tier, see project/common/organizations/pricing.go) has already
+// been reached -- adding this child would exceed what the placowka pays
+// for. Surfaced whether the child is being added by staff directly or via a
+// parent's registration link (project/service/internal/registrationlinks),
+// since both paths call Create.
+var ErrChildrenLimitReached = errors.New("this organization has reached its paid children limit")
 
 func Create(ctx context.Context, argument childrenpg.CreateArgument) (res childrenpg.CreateResponse, err error) {
 	ctx = logger.Enter(ctx, "children.Create", argument)
@@ -63,6 +73,37 @@ func InitiateCreateMutation(ctx context.Context, mutation *childrenpg.CreateMuta
 func ValidateCreateMutation(ctx context.Context, mutation *childrenpg.CreateMutation) (err error) {
 	ctx = logger.Enter(ctx, "children.ValidateCreateMutation", mutation)
 	defer logger.Exit(ctx, "children.ValidateCreateMutation", &err)
+
+	organizationId := mutation.Foundation.OrganizationId
+
+	orgRows, err := gormdb.Select[organizationspg.Organization](ctx, databasepg.Query{
+		Limit: 1,
+		Groups: []databasepg.Group{
+			{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: organizationId}}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if len(orgRows) == 0 {
+		return errors.New("organization not found")
+	}
+
+	// ChildrenLimit of 0 only happens for organizations created before this
+	// field existed -- treated as unlimited rather than zero capacity, so
+	// existing placowki aren't suddenly locked out.
+	limit := orgRows[0].ChildrenLimit
+	if limit == 0 {
+		return nil
+	}
+
+	count, err := CountForOrganization(ctx, organizationId)
+	if err != nil {
+		return err
+	}
+	if count >= limit {
+		return ErrChildrenLimitReached
+	}
 
 	return nil
 }

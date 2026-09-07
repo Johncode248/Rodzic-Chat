@@ -2,6 +2,7 @@ package organizationsgt
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
@@ -48,13 +49,18 @@ func Update(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
-		Name:         request.Name,
-		Address:      request.Address,
-		Nip:          request.Nip,
-		LogoUrl:      request.LogoUrl,
-		PrimaryColor: request.PrimaryColor,
+		Name:          request.Name,
+		Address:       request.Address,
+		Nip:           request.Nip,
+		LogoUrl:       request.LogoUrl,
+		ChildrenLimit: request.ChildrenLimit,
+		PrimaryColor:  request.PrimaryColor,
 	})
 	if err != nil {
+		if errors.Is(err, organizations.ErrChildrenLimitBelowCurrentCount) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

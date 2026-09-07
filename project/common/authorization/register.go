@@ -13,14 +13,18 @@ import (
 // project/common/registrationlinks (parents) and
 // project/common/teacherinvites (teachers).
 type RegisterArgument struct {
-	Name                  string                 `json:"name,omitempty" validate:"required,max=128"`
-	Email                 string                 `json:"email,omitempty" validate:"required,email,max=128"`
-	Phone                 string                 `json:"phone,omitempty" validate:"required,max=32"`
-	Password              string                 `json:"password,omitempty" validate:"required,max=72"`
-	OrganizationName      string                 `json:"organization_name,omitempty" validate:"required,max=128"`
-	OrganizationType      string                 `json:"organization_type,omitempty" validate:"required"`
-	OrganizationSubdomain string                 `json:"organization_subdomain,omitempty" validate:"required,max=63,alphanum"`
-	Data                  map[string]interface{} `json:"data,omitempty"`
+	Name                  string `json:"name,omitempty" validate:"required,max=128"`
+	Email                 string `json:"email,omitempty" validate:"required,email,max=128"`
+	Phone                 string `json:"phone,omitempty" validate:"required,max=32"`
+	Password              string `json:"password,omitempty" validate:"required,max=72"`
+	OrganizationName      string `json:"organization_name,omitempty" validate:"required,max=128"`
+	OrganizationType      string `json:"organization_type,omitempty" validate:"required"`
+	OrganizationSubdomain string `json:"organization_subdomain,omitempty" validate:"required,max=63,alphanum"`
+	// OrganizationChildrenLimit picks the placowka's capacity/pricing tier
+	// -- must be one of organizationspg.ChildrenLimitOptions(). Keep the
+	// "oneof" list below in sync with that slice.
+	OrganizationChildrenLimit int                    `json:"organization_children_limit,omitempty" validate:"required,oneof=20 30 40 50 80 100 120 200 300 400 500"`
+	Data                      map[string]interface{} `json:"data,omitempty"`
 }
 
 func (a RegisterArgument) Validate() error {

@@ -11,7 +11,8 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
-// Select lists groups in the caller's organization.
+// Select lists groups in the caller's organization, optionally filtered by
+// ?q= (free-text, group name, case-insensitive substring match).
 func Select(w http.ResponseWriter, r *http.Request) {
 	var (
 		res groupspg.SelectResponse
@@ -30,6 +31,13 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	query := databasepg.Query{
 		Groups: []databasepg.Group{{}},
 	}
+
+	if q := r.URL.Query().Get("q"); q != "" {
+		query.Groups[0].Filters = append(query.Groups[0].Filters, databasepg.Filter{
+			Key: "name", Operator: "ILIKE", Value: "%" + q + "%",
+		})
+	}
+
 	query = query.AddOrganizationAuth(organizationId)
 
 	res, err = groups.Select(ctx, groupspg.SelectArgument{

@@ -91,6 +91,47 @@ func childIdsForParent(ctx context.Context, accountId string) ([]string, error) 
 	return ids, nil
 }
 
+// groupIdsForParent returns the distinct group ids of every child linked to
+// accountId as a parent -- used to scope a parent's event list to events for
+// their own children's groups (see event.select.go), the same way
+// childIdsForParent scopes their absences.
+func groupIdsForParent(ctx context.Context, accountId string) ([]string, error) {
+	childIds, err := childIdsForParent(ctx, accountId)
+	if err != nil {
+		return nil, err
+	}
+	if len(childIds) == 0 {
+		return nil, nil
+	}
+
+	result, err := children.Select(ctx, childrenpg.SelectArgument{
+		Query: databasepg.Query{
+			Groups: []databasepg.Group{
+				{
+					Filters: []databasepg.Filter{
+						{Key: "id", Operator: "IN", Value: childIds},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	ids := make([]string, 0, len(result.Children))
+	for _, child := range result.Children {
+		if child.GroupId == "" || seen[child.GroupId] {
+			continue
+		}
+		seen[child.GroupId] = true
+		ids = append(ids, child.GroupId)
+	}
+
+	return ids, nil
+}
+
 // eventInOrganization verifies eventId belongs to organizationId and returns
 // the event, since EventRegistration has no organization_id column of its
 // own -- every registration write/read scoped to a specific event must

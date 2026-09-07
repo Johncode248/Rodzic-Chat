@@ -41,6 +41,16 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	parentOk, err := parentInOrganization(ctx, request.ParentId, organizationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !parentOk {
+		http.Error(w, errParentNotInOrganization.Error(), http.StatusForbidden)
+		return
+	}
+
 	res, err = parentchild.Create(ctx, parentchildpg.CreateArgument{
 		ParentId:  request.ParentId,
 		ChildId:   request.ChildId,

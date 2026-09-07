@@ -10,12 +10,18 @@ import (
 )
 
 type UpdateArgument struct {
-	Query        databasepg.Query `json:"query,omitempty" validate:"required"`
-	Name         *string          `json:"name,omitempty" validate:"omitempty,max=128"`
-	Address      *string          `json:"address,omitempty"`
-	Nip          *string          `json:"nip,omitempty"`
-	LogoUrl      *string          `json:"logo_url,omitempty"`
-	PrimaryColor *string          `json:"primary_color,omitempty"`
+	Query   databasepg.Query `json:"query,omitempty" validate:"required"`
+	Name    *string          `json:"name,omitempty" validate:"omitempty,max=128"`
+	Address *string          `json:"address,omitempty"`
+	Nip     *string          `json:"nip,omitempty"`
+	LogoUrl *string          `json:"logo_url,omitempty"`
+	// ChildrenLimit must be one of ChildrenLimitOptions() (see pricing.go)
+	// -- keep the "oneof" list below in sync with that slice. A drop below
+	// the organization's current child count is additionally rejected in
+	// project/service/internal/organizations.ValidateUpdateMutation (needs
+	// a DB read, can't be checked here).
+	ChildrenLimit *int    `json:"children_limit,omitempty" validate:"omitempty,oneof=20 30 40 50 80 100 120 200 300 400 500"`
+	PrimaryColor  *string `json:"primary_color,omitempty"`
 }
 
 func (a UpdateArgument) Populate(organization Organization) Organization {
@@ -36,6 +42,10 @@ func (a UpdateArgument) Populate(organization Organization) Organization {
 
 	if a.LogoUrl != nil {
 		organization.LogoUrl = *a.LogoUrl
+	}
+
+	if a.ChildrenLimit != nil {
+		organization.ChildrenLimit = *a.ChildrenLimit
 	}
 
 	if a.PrimaryColor != nil {

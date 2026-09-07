@@ -20,6 +20,7 @@ type CreateArgument struct {
 	OriginalFilename string `json:"original_filename,omitempty"`
 	ContentType      string `json:"content_type,omitempty"`
 	Caption          string `json:"caption,omitempty"`
+	Category         string `json:"category,omitempty"`
 }
 
 func (a CreateArgument) Validate() error {
@@ -44,6 +45,7 @@ func (a CreateArgument) Populate() (media Media) {
 	media.OriginalFilename = a.OriginalFilename
 	media.ContentType = a.ContentType
 	media.Caption = a.Caption
+	media.Category = a.Category
 	media.CreateTime = time.Now()
 
 	return media

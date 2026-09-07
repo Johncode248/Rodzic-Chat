@@ -108,9 +108,10 @@ func FinalizeRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 	}
 
 	organizationResult, err := organizations.Create(ctx, organizationspg.CreateArgument{
-		Name:      mutation.Foundation.OrganizationName,
-		Type:      organizationType,
-		Subdomain: mutation.Foundation.OrganizationSubdomain,
+		Name:          mutation.Foundation.OrganizationName,
+		Type:          organizationType,
+		Subdomain:     mutation.Foundation.OrganizationSubdomain,
+		ChildrenLimit: mutation.Foundation.OrganizationChildrenLimit,
 	})
 	if err != nil {
 		return err
@@ -191,6 +192,14 @@ func FinalizeRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 // that module is fully built (create/list/search/date-range) as of Faza 7,
 // so it no longer needs to default off pending backend work.
 func defaultFeatureEnabled(feature featurespg.Feature) bool {
+	// Payments needs a completed Stripe Connect onboarding to do anything
+	// useful (see project/common/organizationstripeaccounts) -- defaulting
+	// it on would surface a "Płatności" module that silently can't charge
+	// anyone yet, so it stays off until a director explicitly turns it on
+	// (normally right after finishing onboarding).
+	if feature == featurespg.FeaturePayments {
+		return false
+	}
 	return true
 }
 
@@ -244,7 +253,7 @@ func RollbackRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 							{
 								Filters: []databasepg.Filter{
 									{
-										Key:      "userId",
+										Key:      "user_id",
 										Operator: "=",
 										Value:    mutation.Condition.Account.Id,
 									},

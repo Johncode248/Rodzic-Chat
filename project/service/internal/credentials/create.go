@@ -94,7 +94,7 @@ func RollbackCreateMutation(ctx context.Context, mutation *credentialspg.CreateM
 							{
 								Filters: []databasepg.Filter{
 									{
-										Key:      "userId",
+										Key:      "user_id",
 										Operator: "=",
 										Value:    mutation.Transient.Current.UserId,
 									},

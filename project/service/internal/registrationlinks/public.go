@@ -498,7 +498,7 @@ func rollbackPartialAccountCreate(ctx context.Context, accountId string) error {
 				Foundation: credentialspg.DeleteArgument{
 					Query: databasepg.Query{
 						Groups: []databasepg.Group{
-							{Filters: []databasepg.Filter{{Key: "userId", Operator: "=", Value: accountId}}},
+							{Filters: []databasepg.Filter{{Key: "user_id", Operator: "=", Value: accountId}}},
 						},
 					},
 				},

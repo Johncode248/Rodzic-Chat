@@ -5,15 +5,16 @@ import (
 	"net/smtp"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	"github.com/Johncode248/Rodzic-Chat/variables"
 )
 
 func SendRegisterEmail(ctx context.Context, toEmail string) (err error) {
 	ctx = logger.Enter(ctx, "authorization.SendRegisterEmail", toEmail)
 	defer logger.Exit(ctx, "authorization.SendRegisterEmail", &err)
 
-	host, port, login, password, from := "smtp-relay.brevo.com", "587", "9eaa73001@smtp-brevo.com", "CWajxdtK73q4bVwF", "noreply@asekidea.com"
+	host, port, login, password, from := variables.SMTPHost, variables.SMTPPort, variables.SMTPLogin, variables.SMTPPassword, variables.SMTPFrom
 
-	subject := "Witamy na platformie AsekIdea"
+	subject := "Witamy w Rodzic Chat"
 	body := `<div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 10px 10px;">
         <h2 style="color: #2c3e50; text-align: center; margin-bottom: 25px;">Cześć 👋</h2>
         
@@ -30,11 +31,11 @@ func SendRegisterEmail(ctx context.Context, toEmail string) (err error) {
         
         <p>
             Pozdrawiamy serdecznie,<br>
-            <strong>Zespół AsekIdea</strong>
+            <strong>Zespół Rodzic Chat</strong>
         </p>
-        
+
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 14px;">
-            <p style="margin: 5px 0;">© 2026 Flashy Code Stanisław Marcisz | AsekIdea™</p>
+            <p style="margin: 5px 0;">© 2026 Flashy Code Stanisław Marcisz | Rodzic Chat</p>
             <p style="margin: 5px 0;">Otrzymałeś tę wiadomość, ponieważ zarejestrowałeś się w naszej aplikacji.</p>
         </div>
     </div>

@@ -32,13 +32,14 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = organizations.Create(ctx, organizationspg.CreateArgument{
-		Name:         request.Name,
-		Type:         organizationType,
-		Subdomain:    request.Subdomain,
-		Address:      request.Address,
-		Nip:          request.Nip,
-		LogoUrl:      request.LogoUrl,
-		PrimaryColor: request.PrimaryColor,
+		Name:          request.Name,
+		Type:          organizationType,
+		Subdomain:     request.Subdomain,
+		Address:       request.Address,
+		Nip:           request.Nip,
+		LogoUrl:       request.LogoUrl,
+		ChildrenLimit: request.ChildrenLimit,
+		PrimaryColor:  request.PrimaryColor,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
