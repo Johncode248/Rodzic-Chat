@@ -7,7 +7,10 @@ import (
 	absencespg "github.com/Johncode248/Rodzic-Chat/project/common/absences"
 	accountorganizationspg "github.com/Johncode248/Rodzic-Chat/project/common/accountorganizations"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
+	caregiverspg "github.com/Johncode248/Rodzic-Chat/project/common/caregivers"
+	chatinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/chatinvites"
 	chatspg "github.com/Johncode248/Rodzic-Chat/project/common/chats"
+	childeventspg "github.com/Johncode248/Rodzic-Chat/project/common/childevents"
 	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
 	credentialspg "github.com/Johncode248/Rodzic-Chat/project/common/credentials"
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
@@ -20,8 +23,11 @@ import (
 	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
 	organizationstripeaccountspg "github.com/Johncode248/Rodzic-Chat/project/common/organizationstripeaccounts"
 	parentchildpg "github.com/Johncode248/Rodzic-Chat/project/common/parentchild"
+	parentinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/parentinvites"
+	parentsubscriptionspg "github.com/Johncode248/Rodzic-Chat/project/common/parentsubscriptions"
 	passwordresetspg "github.com/Johncode248/Rodzic-Chat/project/common/passwordresets"
 	paymentspg "github.com/Johncode248/Rodzic-Chat/project/common/payments"
+	placespg "github.com/Johncode248/Rodzic-Chat/project/common/places"
 	platformsettingspg "github.com/Johncode248/Rodzic-Chat/project/common/platformsettings"
 	registrationlinkspg "github.com/Johncode248/Rodzic-Chat/project/common/registrationlinks"
 	sessionspg "github.com/Johncode248/Rodzic-Chat/project/common/sessions"
@@ -106,6 +112,22 @@ func BigMigrate() {
 		panic(err)
 	}
 
+	if err := gormdb.Migrate(context.Background(), chatspg.ChannelMember{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), chatinvitespg.ChatInvite{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), caregiverspg.Caregiver{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), caregiverspg.CaregiverRecommendation{}); err != nil {
+		panic(err)
+	}
+
 	if err := gormdb.Migrate(context.Background(), absencespg.Absence{}); err != nil {
 		panic(err)
 	}
@@ -143,6 +165,30 @@ func BigMigrate() {
 	}
 
 	if err := gormdb.Migrate(context.Background(), paymentspg.Payment{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), parentsubscriptionspg.ParentSubscription{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), placespg.Place{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), placespg.Recommendation{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), placespg.GooglePlacesUsage{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), childeventspg.ChildEvent{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), parentinvitespg.ParentInvite{}); err != nil {
 		panic(err)
 	}
 

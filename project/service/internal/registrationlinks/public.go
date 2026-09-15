@@ -185,10 +185,13 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 		return res, ErrChildAlreadyHasTwoParents
 	}
 
+	effectiveEmail := argument.EffectiveEmail()
+	viaProvider := argument.VerifiedProviderEmail != ""
+
 	emailTaken, err := accounts.Select(ctx, accountspg.SelectArgument{
 		Query: databasepg.Query{
 			Limit:  1,
-			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: argument.Email}}}},
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: effectiveEmail}}}},
 		},
 	})
 	if err != nil {
@@ -197,9 +200,13 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 	// An existing account joining a second (or further) facility: per
 	// product decision, this auto-attaches to the existing account by
 	// matching email rather than erroring or creating a fragmented second
-	// account -- see accountorganizationspg.AccountOrganization. The
-	// submitted password is still verified against that account's real
-	// credential (not skipped) so this can't be used to attach to an
+	// account -- see accountorganizationspg.AccountOrganization. Ownership
+	// of that email is still proven, not skipped -- either the submitted
+	// password verified against that account's real credential, or (via
+	// provider sign-in) the fact that Google/Apple themselves already
+	// vouched for this exact email before this function ever ran (see
+	// oauthverify) -- an even stronger guarantee than a password, so it's
+	// accepted the same way. Either way this can't be used to attach to an
 	// account whose email you merely know, not own -- see ErrWrongPassword.
 	var accountId string
 	joiningExistingAccount := len(emailTaken.Accounts) > 0
@@ -207,18 +214,20 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 	if joiningExistingAccount {
 		accountId = emailTaken.Accounts[0].Id
 
-		credentialResult, err := credentials.Select(ctx, credentialspg.SelectArgument{
-			Query: databasepg.Query{
-				Limit:  1,
-				Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "user_id", Operator: "=", Value: accountId}}}},
-			},
-		})
-		if err != nil {
-			return res, err
-		}
-		if len(credentialResult.Credentials) == 0 ||
-			bcrypt.CompareHashAndPassword([]byte(credentialResult.Credentials[0].Password), []byte(argument.Password)) != nil {
-			return res, ErrWrongPassword
+		if !viaProvider {
+			credentialResult, err := credentials.Select(ctx, credentialspg.SelectArgument{
+				Query: databasepg.Query{
+					Limit:  1,
+					Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "user_id", Operator: "=", Value: accountId}}}},
+				},
+			})
+			if err != nil {
+				return res, err
+			}
+			if len(credentialResult.Credentials) == 0 ||
+				bcrypt.CompareHashAndPassword([]byte(credentialResult.Credentials[0].Password), []byte(argument.Password)) != nil {
+				return res, ErrWrongPassword
+			}
 		}
 	} else {
 		nameTaken, err := nameAlreadyRegisteredInGroup(ctx, link.GroupId, argument.Name)
@@ -231,19 +240,30 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 
 		accountId = uuid.NewString()
 
-		if err = routines.Select(
-			func() error {
-				_, err := accounts.Create(ctx, accountspg.CreateArgument{
-					Id:             accountId,
-					OrganizationId: link.OrganizationId,
-					Name:           argument.Name,
-					Login:          argument.Email,
-					Email:          argument.Email,
-					AccountType:    accountspg.AccountTypeParent,
-					Status:         accountspg.StatusEnabled,
-				})
-				return err
-			},
+		createAccount := func() error {
+			_, err := accounts.Create(ctx, accountspg.CreateArgument{
+				Id:             accountId,
+				OrganizationId: link.OrganizationId,
+				Name:           argument.Name,
+				Login:          effectiveEmail,
+				Email:          effectiveEmail,
+				AccountType:    accountspg.AccountTypeParent,
+				Status:         accountspg.StatusEnabled,
+			})
+			return err
+		}
+
+		if viaProvider {
+			// No Credential row at all: this account can only ever log in
+			// via the same verified provider email (or by setting a
+			// password later through /public/password-recovery, which
+			// works even without an existing Credential).
+			if err = createAccount(); err != nil {
+				_ = rollbackPartialAccountCreate(ctx, accountId)
+				return res, err
+			}
+		} else if err = routines.Select(
+			createAccount,
 			func() error {
 				_, err := credentials.Create(ctx, credentialspg.CreateArgument{
 					UserId:   accountId,
@@ -273,7 +293,7 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 			ChildId:              resolved.childId,
 			ClaimantId:           accountId,
 			ClaimantName:         argument.Name,
-			ClaimantEmail:        argument.Email,
+			ClaimantEmail:        effectiveEmail,
 			ClaimantBirthDate:    *argument.ChildBirthDate,
 			ChildBirthDateOnFile: resolved.childBirthDateOnFile,
 		}); err != nil {

@@ -11,8 +11,8 @@ import (
 )
 
 var googleOAuthConfig2 = &oauth2.Config{
-	ClientID:     "847493899569-93j32dc40hev2dqtfc150sg1d0vdjupd.apps.googleusercontent.com",
-	ClientSecret: "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",
+	ClientID:     variables.GoogleOAuthClientId,
+	ClientSecret: variables.GoogleOAuthClientSecret,
 	RedirectURL:  fmt.Sprintf("%s%s", variables.DOMEIN_B, "/register/callback"),
 	Scopes: []string{
 		"openid",

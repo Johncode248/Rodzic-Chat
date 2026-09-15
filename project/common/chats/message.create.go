@@ -12,13 +12,20 @@ import (
 )
 
 type MessageCreateArgument struct {
-	Id             string      `json:"id,omitempty"`
-	ChannelId      string      `json:"channel_id,omitempty" validate:"required"`
-	OrganizationId string      `json:"organization_id,omitempty" validate:"required"`
+	Id        string `json:"id,omitempty"`
+	ChannelId string `json:"channel_id,omitempty" validate:"required"`
+	// OrganizationId is blank for an org-less parent-to-parent channel (see
+	// project/service/transport/chats/parentchannel.message.create.go) --
+	// not `validate:"required"` for that reason. Real authorization is the
+	// explicit organization/membership check each transport handler does
+	// before ever constructing this argument, not this struct tag.
+	OrganizationId string      `json:"organization_id,omitempty"`
 	SenderId       string      `json:"sender_id,omitempty" validate:"required"`
 	Type           MessageType `json:"type,omitempty" validate:"required"`
-	Content        string      `json:"content,omitempty"`
-	AttachmentUrl  string      `json:"attachment_url,omitempty"`
+	// max=1000: a chat message, not a document -- keeps storage/network payloads bounded and
+	// discourages someone pasting a wall of text into what's meant to be a quick exchange.
+	Content       string `json:"content,omitempty" validate:"max=1000"`
+	AttachmentUrl string `json:"attachment_url,omitempty"`
 }
 
 func (a MessageCreateArgument) Validate() error {

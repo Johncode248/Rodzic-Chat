@@ -11,4 +11,7 @@ type Message struct {
 	Content        string      `json:"content,omitempty"`
 	AttachmentUrl  string      `json:"attachment_url,omitempty"`
 	CreateTime     time.Time   `json:"create_time,omitempty" gorm:"not null"`
+	// SenderName is computed, never persisted -- see chats.AttachSenderNames. Empty for a system
+	// message (SenderId == "") or when the caller's list endpoint didn't populate it.
+	SenderName string `json:"sender_name,omitempty" gorm:"-"`
 }

@@ -40,6 +40,10 @@ func ProcessSelectMutation(ctx context.Context, mutation *childrenpg.SelectMutat
 		return err
 	}
 
+	for i := range result {
+		result[i].HasPesel = result[i].EncryptedPesel != ""
+	}
+
 	mutation.Transient = result
 
 	return nil

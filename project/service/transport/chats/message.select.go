@@ -77,5 +77,11 @@ func SelectMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	res.Messages, err = chats.AttachSenderNames(ctx, res.Messages)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(res)
 }

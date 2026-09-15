@@ -2,6 +2,7 @@ package authgt
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
@@ -28,6 +29,14 @@ func RefreshToken(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: request.RefreshToken,
 	})
 	if err != nil {
+		// Only a token the server can positively say is invalid/expired/
+		// revoked should tell the client "you're logged out" (401) -- any
+		// other failure (DB hiccup, etc.) is 500 so the client's
+		// refresh-and-retry logic knows NOT to wipe the session over it.
+		if errors.Is(err, credentials.ErrInvalidRefreshToken) {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

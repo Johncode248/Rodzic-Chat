@@ -36,5 +36,14 @@ func SelectChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accountId, err := credentials.GetUserIdFromContext(ctx)
+	if err == nil && accountId != "" {
+		res.Channels, err = chats.AttachUnreadFlags(ctx, res.Channels, accountId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	json.NewEncoder(w).Encode(res)
 }

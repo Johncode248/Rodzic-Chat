@@ -10,8 +10,13 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal"
 	absencesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/absences"
 	accountsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/accounts"
+	aichatgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/aichat"
 	authgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/authorization"
+	calendargt "github.com/Johncode248/Rodzic-Chat/project/service/transport/calendar"
+	caregiversgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/caregivers"
+	chatinvitesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/chatinvites"
 	chatsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/chats"
+	childeventsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/childevents"
 	childrengt "github.com/Johncode248/Rodzic-Chat/project/service/transport/children"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 	dashboardgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/dashboard"
@@ -22,10 +27,14 @@ import (
 	guardianclaimsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/guardianclaims"
 	mealsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/meals"
 	mediagt "github.com/Johncode248/Rodzic-Chat/project/service/transport/media"
+	nfzgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/nfz"
 	organizationsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/organizations"
 	organizationstripeaccountsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/organizationstripeaccounts"
 	parentchildgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/parentchild"
+	parentinvitesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/parentinvites"
+	parentsubscriptionsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/parentsubscriptions"
 	paymentsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/payments"
+	placesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/places"
 	platformsettingsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/platformsettings"
 	registrationlinksgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/registrationlinks"
 	stripewebhookgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/stripewebhook"
@@ -58,7 +67,19 @@ func Start() {
 	private := router.PathPrefix("/private").Subrouter()
 
 	public.HandleFunc("/register", authgt.Register).Methods("POST")
+	// A parent signing up entirely on their own, no director invite
+	// involved (mobile-only client-side; see
+	// authorizationpg.RegisterParentArgument's doc comment).
+	public.HandleFunc("/register/parent", authgt.RegisterParent).Methods("POST")
 	public.HandleFunc("/login", authgt.Login).Methods("POST")
+	// Mobile-only alternate logins: Android sends a native Google Sign-In
+	// ID token, iOS sends a native Sign in with Apple identity token. Both
+	// verify the token server-side (project/service/internal/oauthverify)
+	// and match an *existing* Account by its verified email -- distinct
+	// from the /auth/google/login + /login/callback pair below, which is a
+	// browser redirect flow for the web app, not for native mobile.
+	public.HandleFunc("/login/google", authgt.LoginGoogleMobile).Methods("POST")
+	public.HandleFunc("/login/apple", authgt.LoginAppleMobile).Methods("POST")
 	public.HandleFunc("/refresh-token", authgt.RefreshToken).Methods("POST")
 	public.HandleFunc("/password-recovery", authgt.PasswordRecovery).Methods("POST")
 	public.HandleFunc("/password-reset", authgt.ConsumePasswordReset).Methods("POST")
@@ -77,6 +98,14 @@ func Start() {
 	// reasoning as the parent registration links above.
 	public.HandleFunc("/teacher-invites/{token}", teacherinvitesgt.PublicInfo).Methods("GET")
 	public.HandleFunc("/teacher-invites/{token}/register", teacherinvitesgt.PublicRegister).Methods("POST")
+
+	// One parent inviting a co-parent to manage the same children (see
+	// project/common/parentinvites) — peer-to-peer, no organization/
+	// director involved. /register is for someone with no account yet;
+	// the authenticated /accept (below, under /private) is for someone
+	// who already has one.
+	public.HandleFunc("/parent-invites/{token}", parentinvitesgt.PublicInfo).Methods("GET")
+	public.HandleFunc("/parent-invites/{token}/register", parentinvitesgt.PublicRegister).Methods("POST")
 
 	router.HandleFunc("/login/callback", authgt.GoogleCallbackLoginHandler)
 	router.HandleFunc("/register/callback", authgt.GoogleCallbackRegisterHandler)
@@ -193,6 +222,93 @@ func Start() {
 	private.Handle("/children", staffOnly(http.HandlerFunc(childrengt.Update))).Methods("PATCH")
 	private.Handle("/children", staffOnly(http.HandlerFunc(childrengt.Delete))).Methods("DELETE")
 
+	// "Moje dzieci": a parent managing their own children directly, no
+	// placowka required at all (see project/service/internal/children/mine.go)
+	// -- distinct from the staff-only, org-scoped /children above. Any
+	// authenticated account can use these (a parent adding their own kid),
+	// scoped entirely to the caller via ParentChild, never to an org.
+	private.HandleFunc("/children/mine", childrengt.CreateMine).Methods("POST")
+	private.HandleFunc("/children/mine", childrengt.SelectMine).Methods("GET")
+	private.HandleFunc("/children/mine", childrengt.UpdateMine).Methods("PATCH")
+	private.HandleFunc("/children/mine/pesel", childrengt.RevealPesel).Methods("GET")
+	private.HandleFunc("/children/mine", childrengt.DeleteMine).Methods("DELETE")
+
+	// Personal, parent-created calendar entries per child (any linked
+	// parent, no placowka involved) -- see project/common/childevents.
+	private.HandleFunc("/child-events", childeventsgt.Create).Methods("POST")
+	private.HandleFunc("/child-events", childeventsgt.Update).Methods("PATCH")
+	private.HandleFunc("/child-events", childeventsgt.Delete).Methods("DELETE")
+
+	// Merged calendar feed (personal child-events + relevant placowka
+	// events) -- see project/service/internal/calendar.
+	private.HandleFunc("/calendar", calendargt.Get).Methods("GET")
+
+	// One parent inviting a co-parent to manage the same children -- the
+	// authenticated "I already have an account" accept path; see
+	// /public/parent-invites/{token}/register above for the no-account path.
+	private.HandleFunc("/parent-invites", parentinvitesgt.Create).Methods("POST")
+	private.HandleFunc("/parent-invites/{token}/accept", parentinvitesgt.Accept).Methods("POST")
+
+	// Chat invites (project/common/chatinvites): a parent generates a
+	// link/code for another parent to start a private 1:1 chat with no
+	// shared placówka required -- the "rodzice między sobą mimo że szkoła
+	// nie korzysta z aplikacji" case. Parent-only, and deliberately not
+	// behind chatFeature below (there's no organization to check a feature
+	// flag against).
+	parentOnly := credentials.RequireAccountType(accountspg.AccountTypeParent.Ordinal())
+	private.Handle("/chat-invites", parentOnly(http.HandlerFunc(chatinvitesgt.Create))).Methods("POST")
+	private.Handle("/chat-invites/{token}/accept", parentOnly(http.HandlerFunc(chatinvitesgt.Accept))).Methods("POST")
+	private.Handle("/chat-invites/for-channel", parentOnly(http.HandlerFunc(chatinvitesgt.CreateForChannel))).Methods("POST")
+
+	// Parent AI plan (Free/Pro/Max) + usage -- see
+	// project/common/parentsubscriptions. test-set-plan is TEMPORARY
+	// scaffolding (see its own doc comment) standing in for real
+	// StoreKit/Play Billing IAP, which isn't wired up yet.
+	private.HandleFunc("/parent-subscription", parentsubscriptionsgt.Status).Methods("GET")
+	private.HandleFunc("/parent-subscription/limits", parentsubscriptionsgt.Limits).Methods("GET")
+	private.HandleFunc("/parent-subscription/test-set-plan", parentsubscriptionsgt.TestSetPlan).Methods("POST")
+
+	// Parent AI assistant chat -- see project/service/internal/aichat.
+	// Enforces the caller's plan/limit above, then calls Anthropic
+	// (Claude). Mobile-only client-side.
+	private.HandleFunc("/ai-chat/messages", aichatgt.Send).Methods("POST")
+
+	// Parent-recommended places -- see project/common/places.
+	private.HandleFunc("/places/categories", placesgt.Categories).Methods("GET")
+	private.HandleFunc("/places/search", placesgt.Search).Methods("GET")
+	private.HandleFunc("/places/recommend", placesgt.Recommend).Methods("POST")
+	private.HandleFunc("/places/recommend", placesgt.Unrecommend).Methods("DELETE")
+	private.HandleFunc("/places", placesgt.List).Methods("GET")
+
+	// Nanny/tutor professional directory (project/common/caregivers) --
+	// distinct from /places above: each row is owned by the account that
+	// provides the service (self-listed), not an arbitrary third-party
+	// place anyone can add.
+	private.HandleFunc("/caregivers", caregiversgt.List).Methods("GET")
+	private.HandleFunc("/caregivers", caregiversgt.Upsert).Methods("POST")
+	private.HandleFunc("/caregivers", caregiversgt.Delete).Methods("DELETE")
+	private.HandleFunc("/caregivers/mine", caregiversgt.GetMine).Methods("GET")
+	private.HandleFunc("/caregivers/detail", caregiversgt.GetDetail).Methods("GET")
+	private.HandleFunc("/caregivers/recommendations", caregiversgt.Recommend).Methods("POST")
+	private.HandleFunc("/caregivers/recommendations", caregiversgt.Unrecommend).Methods("DELETE")
+
+	// NFZ "Terminy leczenia" (wait-time forecasts) integration -- see project/common/nfz and
+	// project/service/internal/nfz. Public NFZ API, no key needed server-side either; gated
+	// behind our own auth like every other /private route regardless.
+	private.HandleFunc("/nfz/benefits", nfzgt.FindBenefit).Methods("GET")
+	private.HandleFunc("/nfz/queues", nfzgt.SearchQueues).Methods("GET")
+	private.HandleFunc("/nfz/province", nfzgt.ProvinceForLocation).Methods("GET")
+
+	// RSPO (Rejestr Szkół i Placówek Oświatowych) integration -- see project/common/rspo.
+	// DELIBERATELY NOT ROUTED: rspo.Search (project/service/internal/rspo/client.go) calls
+	// https://rspo.gov.pl/api/Institution, the undocumented internal endpoint the public
+	// rspo.gov.pl search page's own JavaScript uses -- not the Ministry of Education's actual
+	// sanctioned integration API (https://api.rspo.gov.pl), which requires a written "wniosek"
+	// to rspo@cie.gov.pl and issued credentials before any programmatic use. Re-enable this
+	// route (and the matching iOS hub section, see SearchHubView's doc comment) once that
+	// request is approved and the client is pointed at the real credentialed endpoint.
+	// private.HandleFunc("/rspo/search", rspogt.Search).Methods("GET") -- import commented out too, see above
+
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Create))).Methods("POST")
 	private.HandleFunc("/groups", groupsgt.Select).Methods("GET")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Update))).Methods("PATCH")
@@ -249,6 +365,22 @@ func Start() {
 	private.Handle("/chats/messages/reactions", chatFeature(http.HandlerFunc(chatsgt.UpsertReaction))).Methods("POST")
 	private.Handle("/chats/messages/reactions", chatFeature(http.HandlerFunc(chatsgt.SelectReactions))).Methods("GET")
 	private.Handle("/chats/messages/reactions", chatFeature(http.HandlerFunc(chatsgt.DeleteReaction))).Methods("DELETE")
+
+	// Org-less parent-to-parent chats (see chat-invites above and
+	// parentchannel.*.go) -- authorized by chatspg.ChannelMember instead of
+	// organization_id, so deliberately NOT wrapped in chatFeature: a parent
+	// with no placówka at all still has these.
+	private.HandleFunc("/chats/parent-channels", chatsgt.SelectParentChannels).Methods("GET")
+	private.HandleFunc("/chats/parent-channels/messages", chatsgt.SelectParentChannelMessages).Methods("GET")
+	private.HandleFunc("/chats/parent-channels/messages", chatsgt.CreateParentChannelMessage).Methods("POST")
+	private.HandleFunc("/chats/parent-channels/members", chatsgt.SelectParentChannelMembers).Methods("GET")
+	private.HandleFunc("/chats/parent-channels/members", chatsgt.RemoveParentChannelMember).Methods("DELETE")
+	private.HandleFunc("/chats/parent-channels/rename", chatsgt.RenameParentChannel).Methods("PATCH")
+	private.HandleFunc("/chats/parent-channels/messages/reads", chatsgt.MarkParentChannelMessageRead).Methods("POST")
+	private.HandleFunc("/chats/parent-channels/messages/reads", chatsgt.SelectParentChannelMessageReads).Methods("GET")
+	private.HandleFunc("/chats/parent-channels/messages/reactions", chatsgt.UpsertParentChannelMessageReaction).Methods("POST")
+	private.HandleFunc("/chats/parent-channels/messages/reactions", chatsgt.SelectParentChannelMessageReactions).Methods("GET")
+	private.HandleFunc("/chats/parent-channels/messages/reactions", chatsgt.DeleteParentChannelMessageReaction).Methods("DELETE")
 
 	// Absences: any org member may report/list (ownership/membership is
 	// checked in the handlers themselves -- a parent may only touch their

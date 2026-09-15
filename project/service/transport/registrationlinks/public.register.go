@@ -7,7 +7,9 @@ import (
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	registrationlinkspg "github.com/Johncode248/Rodzic-Chat/project/common/registrationlinks"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/oauthverify"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/registrationlinks"
+	"github.com/Johncode248/Rodzic-Chat/variables"
 	"github.com/gorilla/mux"
 )
 
@@ -47,14 +49,36 @@ func PublicRegister(w http.ResponseWriter, r *http.Request) {
 		childBirthDate = &parsed
 	}
 
+	// Mobile-only sign-up shortcut (Android: Google, iOS: Apple) -- verify
+	// the token server-side before it ever reaches PublicRegister, exactly
+	// like the mobile-only login endpoints (login.google.mobile.go /
+	// login.apple.mobile.go). The web registration form never sends these
+	// fields, so this branch simply never triggers for it.
+	var verifiedProviderEmail string
+	switch {
+	case request.GoogleIdToken != "":
+		verifiedProviderEmail, err = oauthverify.VerifyGoogleIDToken(request.GoogleIdToken, variables.GoogleOAuthClientId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+	case request.AppleIdentityToken != "":
+		verifiedProviderEmail, err = oauthverify.VerifyAppleIdentityToken(request.AppleIdentityToken, variables.AppleAudience)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+	}
+
 	res, err = registrationlinks.PublicRegister(ctx, registrationlinkspg.PublicRegisterArgument{
-		Token:          token,
-		ChildFirstName: request.ChildFirstName,
-		ChildLastName:  request.ChildLastName,
-		ChildBirthDate: childBirthDate,
-		Name:           request.Name,
-		Email:          request.Email,
-		Password:       request.Password,
+		Token:                 token,
+		ChildFirstName:        request.ChildFirstName,
+		ChildLastName:         request.ChildLastName,
+		ChildBirthDate:        childBirthDate,
+		Name:                  request.Name,
+		Email:                 request.Email,
+		Password:              request.Password,
+		VerifiedProviderEmail: verifiedProviderEmail,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
