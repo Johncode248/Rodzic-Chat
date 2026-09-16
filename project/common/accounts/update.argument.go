@@ -13,6 +13,12 @@ type UpdateArgument struct {
 	Query databasepg.Query `json:"query,omitempty" validate:"required"`
 	Name  *string          `json:"name,omitempty" validate:"omitempty,max=64"`
 	Phone *string          `json:"phone,omitempty" validate:"omitempty,max=20"`
+	// Permissions is set only by the director-only staff-permissions
+	// route (accountsgt.UpdateStaffPermissions) -- it is deliberately
+	// absent from UpdateRequest, the DTO the self-service PATCH
+	// /private/accounts endpoint decodes into, so a caller can never grant
+	// themselves permissions through the self-update path.
+	Permissions *Permission `json:"permissions,omitempty"`
 }
 
 func (a UpdateArgument) Populate(account Account) Account {
@@ -25,6 +31,10 @@ func (a UpdateArgument) Populate(account Account) Account {
 
 	if a.Phone != nil {
 		account.Phone = *a.Phone
+	}
+
+	if a.Permissions != nil {
+		account.Permissions = *a.Permissions
 	}
 
 	return account

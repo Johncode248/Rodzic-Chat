@@ -177,6 +177,11 @@ func Start() {
 	// caller's own account).
 	private.Handle("/accounts/staff", organizationsDirectorOnly(http.HandlerFunc(accountsgt.DeleteStaff))).Methods("DELETE")
 
+	// Staff permission grants: director/co-director grants or revokes extra
+	// capabilities (currently: managing payments) on a teacher account in
+	// their own org, without promoting them to co-director.
+	private.Handle("/accounts/staff/permissions", organizationsDirectorOnly(http.HandlerFunc(accountsgt.UpdateStaffPermissions))).Methods("PATCH")
+
 	// Director dashboard activity feed (see project/common/dashboard).
 	private.Handle("/dashboard/feed", staffOnlyRoster(http.HandlerFunc(dashboardgt.Feed))).Methods("GET")
 
@@ -327,15 +332,21 @@ func Start() {
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Update))).Methods("PATCH")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Delete))).Methods("DELETE")
 
-	// Payments: director/co-director create/edit/reconcile; any org member
-	// can list (a parent only ever sees their own, see paymentsgt.Select).
-	// Checkout isn't staff-gated -- it's implicitly scoped to "your own
-	// assigned payment" inside payments.CreateCheckoutSession.
+	// Payments: director/co-director create/edit/reconcile, or a teacher the
+	// director has explicitly granted PermissionManagePayments (see
+	// /accounts/staff/permissions above); any org member can list (a parent
+	// only ever sees their own, see paymentsgt.Select). Checkout isn't
+	// staff-gated -- it's implicitly scoped to "your own assigned payment"
+	// inside payments.CreateCheckoutSession.
 	paymentsFeature := credentials.RequireFeature(featurespg.FeaturePayments)
-	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Create)))).Methods("POST")
+	paymentsManage := credentials.RequireAccountTypeOrPermission(
+		accountspg.PermissionManagePayments,
+		accountspg.AccountTypeDirector.Ordinal(), accountspg.AccountTypeCoDirector.Ordinal(),
+	)
+	private.Handle("/payments", paymentsFeature(paymentsManage(http.HandlerFunc(paymentsgt.Create)))).Methods("POST")
 	private.Handle("/payments", paymentsFeature(http.HandlerFunc(paymentsgt.Select))).Methods("GET")
-	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Update)))).Methods("PATCH")
-	private.Handle("/payments", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(paymentsgt.Delete)))).Methods("DELETE")
+	private.Handle("/payments", paymentsFeature(paymentsManage(http.HandlerFunc(paymentsgt.Update)))).Methods("PATCH")
+	private.Handle("/payments", paymentsFeature(paymentsManage(http.HandlerFunc(paymentsgt.Delete)))).Methods("DELETE")
 	private.Handle("/payments/checkout", paymentsFeature(http.HandlerFunc(paymentsgt.Checkout))).Methods("POST")
 
 	private.Handle("/organizations/stripe/onboarding-link", paymentsFeature(organizationsDirectorOnly(http.HandlerFunc(organizationstripeaccountsgt.OnboardingLink)))).Methods("POST")
