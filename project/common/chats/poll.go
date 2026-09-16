@@ -19,9 +19,14 @@ type PollOption struct {
 }
 
 type PollVote struct {
-	Id         string    `json:"id,omitempty" gorm:"primaryKey"`
-	PollId     string    `json:"poll_id,omitempty" gorm:"not null;index"`
-	OptionId   string    `json:"option_id,omitempty" gorm:"not null;index"`
-	AccountId  string    `json:"account_id,omitempty" gorm:"not null;index"`
+	Id     string `json:"id,omitempty" gorm:"primaryKey"`
+	PollId string `json:"poll_id,omitempty" gorm:"not null;index"`
+	// The uniqueIndex below is defense-in-depth on top of the
+	// pg_advisory_xact_lock in chats.CreateVote: it guarantees at the DB
+	// level that one account can never hold two rows for the same
+	// (poll, option) pair, which is exactly what let a multi-choice poll's
+	// vote count be inflated by repeated calls before this existed.
+	OptionId   string    `json:"option_id,omitempty" gorm:"not null;uniqueIndex:idx_poll_vote_unique"`
+	AccountId  string    `json:"account_id,omitempty" gorm:"not null;uniqueIndex:idx_poll_vote_unique"`
 	CreateTime time.Time `json:"create_time,omitempty" gorm:"not null"`
 }

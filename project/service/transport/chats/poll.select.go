@@ -80,6 +80,30 @@ func SelectPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accountType, err := credentials.GetAccountTypeFromContext(ctx)
+	if err != nil {
+		http.Error(w, "Error getting accountType from context", http.StatusForbidden)
+		return
+	}
+	channelResult, err := chats.SelectChannels(ctx, chatspg.ChannelSelectArgument{
+		Query: databasepg.Query{
+			Limit:  1,
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: messageResult.Messages[0].ChannelId}}}},
+		},
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(channelResult.Channels) == 0 {
+		http.Error(w, "channel not found", http.StatusNotFound)
+		return
+	}
+	if err = chats.CheckReadPermission(ctx, channelResult.Channels[0], accountId, accountType); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	res, err = chats.GetPollDetail(ctx, pollId, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

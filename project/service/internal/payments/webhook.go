@@ -42,13 +42,25 @@ func ApplyCheckoutCompleted(ctx context.Context, stripeCheckoutSessionId, stripe
 	}
 
 	now := time.Now()
-	payment.Status = paymentspg.PaymentStatusPaid
-	payment.PaidAt = &now
-	payment.StripePaymentIntentId = stripePaymentIntentId
-	if actualStripeFeeGrosze > 0 {
-		payment.ActualStripeFeeGrosze = actualStripeFeeGrosze
-	}
-	payment.UpdateTime = now
 
-	return gormdb.Update(ctx, &payment, query)
+	// A narrow, column-scoped update, not gormdb.Update(ctx, &payment,
+	// query) (a full-row Select("*").Updates(model) overwrite using this
+	// in-memory `payment` struct) -- a concurrent staff edit (e.g.
+	// payments.Update changing Title/Description while this webhook is
+	// processing) would otherwise be silently reverted the moment this
+	// write lands, or vice versa. Mirrors the same fix already applied to
+	// payments.CreateCheckoutSession and payments.Update.
+	changes := map[string]interface{}{
+		"status":                   paymentspg.PaymentStatusPaid,
+		"paid_at":                  &now,
+		"stripe_payment_intent_id": stripePaymentIntentId,
+		"update_time":              now,
+	}
+	if actualStripeFeeGrosze > 0 {
+		changes["actual_stripe_fee_grosze"] = actualStripeFeeGrosze
+	}
+
+	return gormdb.GormDB.WithContext(ctx).Model(&paymentspg.Payment{}).
+		Where("id = ?", payment.Id).
+		Updates(changes).Error
 }

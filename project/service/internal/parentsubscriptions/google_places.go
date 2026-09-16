@@ -7,6 +7,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	parentsubscriptionspg "github.com/Johncode248/Rodzic-Chat/project/common/parentsubscriptions"
+	"gorm.io/gorm"
 )
 
 func isSameDay(a, b time.Time) bool {
@@ -25,29 +26,40 @@ func TryConsumeDailyGoogleSearch(ctx context.Context, accountId string) (allowed
 	ctx = logger.Enter(ctx, "parentsubscriptions.TryConsumeDailyGoogleSearch", accountId)
 	defer logger.Exit(ctx, "parentsubscriptions.TryConsumeDailyGoogleSearch", &allowed, &err)
 
-	current, err := GetOrCreate(ctx, accountId)
+	// Same TOCTOU race as IncrementUsageWithTokens (see its comment): two
+	// concurrent searches for the same account could both read the same
+	// pre-increment GooglePlacesUsedToday and both pass the cap check,
+	// letting a parent exceed DailyGooglePlacesSearchLimit. Serialized per
+	// account via pg_advisory_xact_lock, same pattern.
+	err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", accountId).Error; err != nil {
+			return err
+		}
+
+		current, err := GetOrCreate(ctx, accountId)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		if !isSameDay(current.GooglePlacesUsageDate, now) {
+			current.GooglePlacesUsedToday = 0
+			current.GooglePlacesUsageDate = now
+		}
+
+		if current.GooglePlacesUsedToday >= parentsubscriptionspg.DailyGooglePlacesSearchLimit {
+			current.UpdateTime = now
+			allowed = false
+			return gormdb.Update(ctx, &current, byAccountId(accountId))
+		}
+
+		current.GooglePlacesUsedToday++
+		current.UpdateTime = now
+		allowed = true
+		return gormdb.Update(ctx, &current, byAccountId(accountId))
+	})
 	if err != nil {
 		return false, err
 	}
-
-	now := time.Now()
-	if !isSameDay(current.GooglePlacesUsageDate, now) {
-		current.GooglePlacesUsedToday = 0
-		current.GooglePlacesUsageDate = now
-	}
-
-	if current.GooglePlacesUsedToday >= parentsubscriptionspg.DailyGooglePlacesSearchLimit {
-		current.UpdateTime = now
-		if err = gormdb.Update(ctx, &current, byAccountId(accountId)); err != nil {
-			return false, err
-		}
-		return false, nil
-	}
-
-	current.GooglePlacesUsedToday++
-	current.UpdateTime = now
-	if err = gormdb.Update(ctx, &current, byAccountId(accountId)); err != nil {
-		return false, err
-	}
-	return true, nil
+	return allowed, nil
 }

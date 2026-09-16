@@ -32,8 +32,8 @@ func DeleteChannel(ctx context.Context, argument chatspg.ChannelDeleteArgument) 
 
 	defer func() {
 		if err != nil {
-			if err = RollbackChannelDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackChannelDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

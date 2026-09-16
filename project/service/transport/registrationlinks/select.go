@@ -9,6 +9,7 @@ import (
 	registrationlinkspg "github.com/Johncode248/Rodzic-Chat/project/common/registrationlinks"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/registrationlinks"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists every registration link in the caller's organization,
@@ -39,6 +40,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = registrationlinks.Select(ctx, registrationlinkspg.SelectArgument{Query: query})
 	if err != nil {

@@ -31,6 +31,18 @@ func Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if request.TeacherId != nil && *request.TeacherId != "" {
+		ok, teacherErr := teacherInOrganization(ctx, *request.TeacherId, organizationId)
+		if teacherErr != nil {
+			http.Error(w, teacherErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, errTeacherNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
+	}
+
 	res, err = groups.Update(ctx, groupspg.UpdateArgument{
 		Query:                             request.Query.AddOrganizationAuth(organizationId),
 		Name:                              request.Name,

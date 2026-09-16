@@ -88,7 +88,11 @@ func DeclareRegistration(w http.ResponseWriter, r *http.Request) {
 		ConsentGiven: request.ConsentGiven,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		if err == events.ErrRegistrationDeadlinePassed || err == events.ErrConsentRequired {
+			status = http.StatusForbidden
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 

@@ -50,6 +50,9 @@ func SelectParentChannelMessages(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
 		limit = l
+		if limit > maxMessageListLimit {
+			limit = maxMessageListLimit
+		}
 	}
 	offset := 0
 	if o, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && o > 0 {

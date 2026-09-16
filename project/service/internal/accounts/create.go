@@ -34,8 +34,8 @@ func Create(ctx context.Context, argument accountspg.CreateArgument) (res accoun
 
 	defer func() {
 		if err != nil {
-			if err = RollbackCreateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackCreateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

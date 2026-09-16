@@ -30,8 +30,8 @@ func CreateChannel(ctx context.Context, argument chatspg.ChannelCreateArgument) 
 
 	defer func() {
 		if err != nil {
-			if err = RollbackChannelCreateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackChannelCreateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

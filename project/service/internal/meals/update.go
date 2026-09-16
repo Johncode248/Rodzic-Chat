@@ -2,11 +2,19 @@ package meals
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	mealspg "github.com/Johncode248/Rodzic-Chat/project/common/meals"
 )
+
+// ErrInvalidDateRange mirrors CreateArgument.Validate's "date_to must not
+// be before date_from" check, applied after Populate() merges the patch
+// onto the existing row -- see the identical comment on
+// absences.ErrInvalidDateRange for why this can't live in
+// UpdateArgument.Validate() itself.
+var ErrInvalidDateRange = errors.New("date_to must not be before date_from")
 
 func Update(ctx context.Context, argument mealspg.UpdateArgument) (res mealspg.UpdateResponse, err error) {
 	ctx = logger.Enter(ctx, "meals.Update", argument)
@@ -28,8 +36,8 @@ func Update(ctx context.Context, argument mealspg.UpdateArgument) (res mealspg.U
 
 	defer func() {
 		if err != nil {
-			if err = RollbackUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()
@@ -57,6 +65,10 @@ func InitiateUpdateMutation(ctx context.Context, mutation *mealspg.UpdateMutatio
 	}
 
 	updateCancellation := mutation.Foundation.Populate(result.MealCancellations[0])
+
+	if updateCancellation.DateTo.Before(updateCancellation.DateFrom) {
+		return ErrInvalidDateRange
+	}
 
 	mutation.Transient = mealspg.Transient{
 		Current: result.MealCancellations[0],

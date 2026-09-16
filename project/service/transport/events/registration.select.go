@@ -9,6 +9,7 @@ import (
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/events"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // SelectRegistrations lists registrations, org-scoped via the event.
@@ -86,10 +87,14 @@ func SelectRegistrations(w http.ResponseWriter, r *http.Request) {
 		filters = append(filters, databasepg.Filter{Key: "child_id", Operator: "IN", Value: childIds})
 	}
 
+	query := databasepg.Query{
+		Groups:  []databasepg.Group{{Filters: filters}},
+		OrderBy: databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending},
+	}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
+
 	res, err = events.SelectRegistrations(ctx, eventspg.RegistrationSelectArgument{
-		Query: databasepg.Query{
-			Groups: []databasepg.Group{{Filters: filters}},
-		},
+		Query: query,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

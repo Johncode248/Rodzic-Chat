@@ -35,6 +35,22 @@ func RetractVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
+	if err != nil || organizationId == "" {
+		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
+		return
+	}
+
+	inOrg, err := pollInOrganization(ctx, pollId, organizationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !inOrg {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+		return
+	}
+
 	filters := []databasepg.Filter{
 		{Key: "poll_id", Operator: "=", Value: pollId},
 		{Key: "account_id", Operator: "=", Value: accountId},

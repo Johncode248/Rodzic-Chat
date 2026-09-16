@@ -30,8 +30,8 @@ func CreateRegistration(ctx context.Context, argument eventspg.RegistrationCreat
 
 	defer func() {
 		if err != nil {
-			if err = RollbackRegistrationCreateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackRegistrationCreateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

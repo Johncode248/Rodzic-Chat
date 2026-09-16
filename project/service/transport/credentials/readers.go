@@ -23,15 +23,6 @@ func GetUserEmailFromContext(ctx context.Context) (email string, err error) {
 	return email, nil
 }
 
-func GetCustomerIdFromContext(ctx context.Context) (customerId string, err error) {
-	customerId = ctx.Value("customerId").(string)
-	if customerId == "" {
-		return "", errors.New("customerId not found in context")
-	}
-
-	return customerId, nil
-}
-
 func GetOrganizationIdFromContext(ctx context.Context) (organizationId string, err error) {
 	organizationId = ctx.Value("organizationId").(string)
 	if organizationId == "" {

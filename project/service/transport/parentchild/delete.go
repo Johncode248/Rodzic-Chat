@@ -40,30 +40,52 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	childId := ""
-	for _, group := range request.Query.Groups {
-		for _, filter := range group.Filters {
-			if filter.Key == "child_id" {
-				if value, ok := filter.Value.(string); ok {
-					childId = value
-				}
-			}
-		}
-	}
-
-	if childId == "" {
+	// ParentChild has no organization_id column of its own, so unlike
+	// every other org-scoped Delete in this codebase there's no query-level
+	// AddOrganizationAuth safety net -- the org check below on each
+	// child_id IS the entire tenant boundary for this endpoint. The query
+	// can be a multi-OR-group filter (each group ANDed internally, groups
+	// ORed together at the SQL level -- see gormdb.makeCondition), so EVERY
+	// group must carry its own validated child_id: a group that omits one
+	// entirely would otherwise let that group's other filters (e.g. a bare
+	// parent_id) match and delete rows completely unconstrained by
+	// organization, regardless of what child_id appeared in some other
+	// group. This previously only collected the union of child_ids seen
+	// anywhere and validated those, which a query like
+	// {"groups":[{"child_id":"<a real child in this org>"},{"parent_id":"<arbitrary>"}]}
+	// bypassed entirely.
+	if len(request.Query.Groups) == 0 {
 		http.Error(w, "Query must filter by child_id", http.StatusBadRequest)
 		return
 	}
 
-	inOrg, err := childInOrganization(ctx, childId, organizationId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	childIdSet := map[string]bool{}
+	for _, group := range request.Query.Groups {
+		groupChildId := ""
+		for _, filter := range group.Filters {
+			if filter.Key == "child_id" {
+				if value, ok := filter.Value.(string); ok && value != "" {
+					groupChildId = value
+				}
+			}
+		}
+		if groupChildId == "" {
+			http.Error(w, "Every filter group must include a child_id", http.StatusBadRequest)
+			return
+		}
+		childIdSet[groupChildId] = true
 	}
-	if !inOrg {
-		http.Error(w, errChildNotInOrganization.Error(), http.StatusForbidden)
-		return
+
+	for childId := range childIdSet {
+		inOrg, err := childInOrganization(ctx, childId, organizationId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !inOrg {
+			http.Error(w, errChildNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
 	}
 
 	accountType, err := credentials.GetAccountTypeFromContext(r.Context())

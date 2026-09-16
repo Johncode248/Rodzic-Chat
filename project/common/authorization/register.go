@@ -13,10 +13,14 @@ import (
 // project/common/registrationlinks (parents) and
 // project/common/teacherinvites (teachers).
 type RegisterArgument struct {
-	Name                  string `json:"name,omitempty" validate:"required,max=128"`
-	Email                 string `json:"email,omitempty" validate:"required,email,max=128"`
-	Phone                 string `json:"phone,omitempty" validate:"required,max=32"`
-	Password              string `json:"password,omitempty" validate:"required,max=72"`
+	Name  string `json:"name,omitempty" validate:"required,max=128"`
+	Email string `json:"email,omitempty" validate:"required,email,max=128"`
+	Phone string `json:"phone,omitempty" validate:"required,max=32"`
+	// min=6 matches every other self-service registration path in the app
+	// (teacherinvites, registrationlinks, parent-invites) -- this one was
+	// the only one missing it, letting a director register with e.g. a
+	// single-character password.
+	Password              string `json:"password,omitempty" validate:"required,min=6,max=72"`
 	OrganizationName      string `json:"organization_name,omitempty" validate:"required,max=128"`
 	OrganizationType      string `json:"organization_type,omitempty" validate:"required"`
 	OrganizationSubdomain string `json:"organization_subdomain,omitempty" validate:"required,max=63,alphanum"`

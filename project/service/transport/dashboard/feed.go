@@ -11,9 +11,14 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
+// maxFeedLimit bounds ?limit= so one request can't force an unbounded
+// SELECT (and unbounded JSON response) -- e.g. ?limit=999999999.
+const maxFeedLimit = 200
+
 // Feed returns the director dashboard's activity feed, org-scoped,
 // merging recent new-parent registrations, absence reports, and chat
-// announcements sorted by time desc. Optional ?limit= (default 20).
+// announcements sorted by time desc. Optional ?limit= (default 20, capped
+// at maxFeedLimit).
 func Feed(w http.ResponseWriter, r *http.Request) {
 	var (
 		res dashboardpg.FeedResponse
@@ -32,6 +37,9 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 	limit := 20
 	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
 		limit = l
+		if limit > maxFeedLimit {
+			limit = maxFeedLimit
+		}
 	}
 
 	res, err = dashboard.Feed(ctx, organizationId, limit)

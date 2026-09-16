@@ -9,6 +9,7 @@ import (
 	teacherinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/teacherinvites"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/teacherinvites"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists every teacher invite in the caller's organization,
@@ -39,6 +40,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = teacherinvites.Select(ctx, teacherinvitespg.SelectArgument{Query: query})
 	if err != nil {

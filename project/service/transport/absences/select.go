@@ -10,6 +10,7 @@ import (
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/absences"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists absences in the caller's organization. Staff see every
@@ -93,6 +94,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	query.Groups[0].Filters = append(query.Groups[0].Filters, dateRangeFilters(r.URL.Query().Get("date_from"), r.URL.Query().Get("date_to"))...)
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "date_from", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = absences.Select(ctx, absencespg.SelectArgument{
 		Query: query,

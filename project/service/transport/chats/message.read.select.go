@@ -42,6 +42,36 @@ func SelectReads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
+	if err != nil || organizationId == "" {
+		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
+		return
+	}
+
+	inOrg, err := messageInOrganization(ctx, messageId, organizationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !inOrg {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+		return
+	}
+
+	channel, found, err := channelForMessage(ctx, messageId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+	if err = chats.CheckReadPermission(ctx, channel, accountId, accountType); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	filters := []databasepg.Filter{
 		{Key: "message_id", Operator: "=", Value: messageId},
 	}

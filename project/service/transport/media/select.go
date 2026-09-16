@@ -7,9 +7,11 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/api_bucket"
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	mediapg "github.com/Johncode248/Rodzic-Chat/project/common/media"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/media"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // SelectResponse resolves each row's downloadable URL via a 1h presigned
@@ -45,6 +47,28 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	eventId := r.URL.Query().Get("event_id")
 	groupId := r.URL.Query().Get("group_id")
 
+	if groupId != "" {
+		accountType, accountTypeErr := credentials.GetAccountTypeFromContext(ctx)
+		isStaff := accountTypeErr == nil && (accountType == accountspg.AccountTypeDirector.Ordinal() ||
+			accountType == accountspg.AccountTypeCoDirector.Ordinal() || accountType == accountspg.AccountTypeTeacher.Ordinal())
+		if !isStaff {
+			accountId, accountIdErr := credentials.GetUserIdFromContext(ctx)
+			if accountIdErr != nil || accountId == "" {
+				http.Error(w, "Error getting accountId from context", http.StatusForbidden)
+				return
+			}
+			ok, groupErr := parentInGroup(ctx, accountId, groupId)
+			if groupErr != nil {
+				http.Error(w, groupErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				http.Error(w, "caller is not a member of this group", http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	var query databasepg.Query
 
 	if groupId != "" && eventId == "" {
@@ -67,6 +91,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	result, err := media.Select(ctx, mediapg.SelectArgument{Query: query})
 	if err != nil {

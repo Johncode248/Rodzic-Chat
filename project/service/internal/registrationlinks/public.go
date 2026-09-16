@@ -7,6 +7,7 @@ import (
 	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	accountorganizationspg "github.com/Johncode248/Rodzic-Chat/project/common/accountorganizations"
@@ -28,6 +29,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/parentchild"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 var ErrLinkNotFound = errors.New("registration link not found")
@@ -300,22 +302,55 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 			return res, err
 		}
 	} else {
-		if _, err = parentchild.Create(ctx, parentchildpg.CreateArgument{
-			ParentId:  accountId,
-			ChildId:   resolved.childId,
-			Relation:  parentchildpg.RelationTypeGuardian,
-			CanPickup: true,
-		}); err != nil {
+		// The count-then-insert two-parent check above is only an early,
+		// informational rejection -- two concurrent registrations naming
+		// the same child can both pass it before either commits. Re-check
+		// atomically inside a transaction serialized per-child via
+		// pg_advisory_xact_lock (same pattern as chatinvites.Create's
+		// per-account channel-limit check) immediately before the actual
+		// insert, so the real enforcement point can't be raced.
+		err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", resolved.childId).Error; err != nil {
+				return err
+			}
+
+			var parentCount int64
+			if err := tx.Model(&parentchildpg.ParentChild{}).Where("child_id = ?", resolved.childId).Count(&parentCount).Error; err != nil {
+				return err
+			}
+			if parentCount >= 2 {
+				return ErrChildAlreadyHasTwoParents
+			}
+
+			pc := parentchildpg.CreateArgument{
+				ParentId:  accountId,
+				ChildId:   resolved.childId,
+				Relation:  parentchildpg.RelationTypeGuardian,
+				CanPickup: true,
+			}.Populate()
+			return tx.Create(&pc).Error
+		})
+		if err != nil {
 			return res, err
 		}
 	}
 
-	newUsedCount := link.UsedCount + 1
-	if _, err = Update(ctx, registrationlinkspg.UpdateArgument{
-		Query:     byToken(argument.Token),
-		UsedCount: &newUsedCount,
-	}); err != nil {
-		return res, err
+	// Atomic conditional increment, not a blind read-then-write: two
+	// concurrent registrations at the last remaining slot could otherwise
+	// both read the same pre-increment UsedCount, both pass the earlier
+	// informational check, and both commit, exceeding MaxRegistrations.
+	// Gating the UPDATE itself on "still under the cap" and checking
+	// RowsAffected makes this the real enforcement point -- only as many
+	// concurrent callers as there are remaining slots can ever succeed.
+	updateResult := gormdb.GormDB.WithContext(ctx).
+		Model(&registrationlinkspg.RegistrationLink{}).
+		Where("token = ? AND used_count < max_registrations", argument.Token).
+		Update("used_count", gorm.Expr("used_count + 1"))
+	if updateResult.Error != nil {
+		return res, updateResult.Error
+	}
+	if updateResult.RowsAffected == 0 {
+		return res, ErrLinkExhausted
 	}
 
 	if resolved.needsDirectorApproval {

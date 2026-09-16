@@ -13,6 +13,45 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// redactedSensitiveKeyFragments matches JSON object keys (case-insensitive
+// substring) whose value must never reach the logs -- passwords are logged
+// in plaintext on every login/register call otherwise, since Enter/Exit
+// JSON-marshal whatever request/argument struct they're handed wholesale
+// (see getDataFlow below).
+var redactedSensitiveKeyFragments = []string{"password"}
+
+const redactedPlaceholder = "[REDACTED]"
+
+func isSensitiveKey(key string) bool {
+	lower := strings.ToLower(key)
+	for _, fragment := range redactedSensitiveKeyFragments {
+		if strings.Contains(lower, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+// redactSensitive walks a generic json.Unmarshal-produced value (maps/
+// slices/scalars) and blanks out any object value whose key looks
+// sensitive, in place.
+func redactSensitive(v interface{}) {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		for k, sub := range val {
+			if isSensitiveKey(k) {
+				val[k] = redactedPlaceholder
+				continue
+			}
+			redactSensitive(sub)
+		}
+	case []interface{}:
+		for _, sub := range val {
+			redactSensitive(sub)
+		}
+	}
+}
+
 var tracer = otel.Tracer("my-service-logger")
 
 func Enter(ctx context.Context, name string, input ...interface{}) context.Context {
@@ -130,9 +169,18 @@ func getDataFlow(args ...interface{}) []string { // Zmieniamy powrót na []strin
 		if err != nil {
 			// Jeśli JSON zawiedzie, użyj fmt z nazwami pól (%+v)
 			result = append(result, fmt.Sprintf("%+v", v.Interface()))
-		} else {
-			result = append(result, string(b))
+			continue
 		}
+
+		var generic interface{}
+		if err := json.Unmarshal(b, &generic); err == nil {
+			redactSensitive(generic)
+			if redacted, err := json.Marshal(generic); err == nil {
+				b = redacted
+			}
+		}
+
+		result = append(result, string(b))
 	}
 	return result
 }

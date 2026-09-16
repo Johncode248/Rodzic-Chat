@@ -33,7 +33,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), "userId", token.UserId)
 		ctx = context.WithValue(ctx, "userEmail", token.Email)
-		ctx = context.WithValue(ctx, "customerId", token.CustomerId)
 		ctx = context.WithValue(ctx, "organizationId", token.OrganizationId)
 		ctx = context.WithValue(ctx, "accountType", token.AccountType)
 		ctx = context.WithValue(ctx, "sessionId", token.SessionId)

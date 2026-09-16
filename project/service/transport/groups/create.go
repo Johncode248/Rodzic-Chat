@@ -2,6 +2,7 @@ package groupsgt
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
@@ -9,6 +10,8 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/groups"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
+
+var errTeacherNotInOrganization = errors.New("teacher account does not belong to the caller's organization")
 
 func Create(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -29,6 +32,18 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil || organizationId == "" {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
+	}
+
+	if request.TeacherId != "" {
+		ok, teacherErr := teacherInOrganization(ctx, request.TeacherId, organizationId)
+		if teacherErr != nil {
+			http.Error(w, teacherErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, errTeacherNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
 	}
 
 	res, err = groups.Create(ctx, groupspg.CreateArgument{

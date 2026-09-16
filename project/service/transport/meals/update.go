@@ -79,7 +79,11 @@ func Update(w http.ResponseWriter, r *http.Request) {
 		Reason:   request.Reason,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		if err == meals.ErrInvalidDateRange {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 	if res.MealCancellation.Id == "" {

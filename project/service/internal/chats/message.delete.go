@@ -29,8 +29,8 @@ func DeleteMessage(ctx context.Context, argument chatspg.MessageDeleteArgument) 
 
 	defer func() {
 		if err != nil {
-			if err = RollbackMessageDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackMessageDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

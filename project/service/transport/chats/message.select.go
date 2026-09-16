@@ -50,9 +50,27 @@ func SelectMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accountId, err := credentials.GetUserIdFromContext(ctx)
+	if err != nil || accountId == "" {
+		http.Error(w, "Error getting accountId from context", http.StatusForbidden)
+		return
+	}
+	accountType, err := credentials.GetAccountTypeFromContext(ctx)
+	if err != nil {
+		http.Error(w, "Error getting accountType from context", http.StatusForbidden)
+		return
+	}
+	if err = chats.CheckReadPermission(ctx, channelResult.Channels[0], accountId, accountType); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	limit := 50
 	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
 		limit = l
+		if limit > maxMessageListLimit {
+			limit = maxMessageListLimit
+		}
 	}
 	offset := 0
 	if o, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && o > 0 {

@@ -2,12 +2,15 @@ package platformsettings
 
 import (
 	"context"
+	"errors"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	platformsettingspg "github.com/Johncode248/Rodzic-Chat/project/common/platformsettings"
 )
+
+var ErrInvalidPercentBps = errors.New("stripe_assumed_percent_bps must be between 0 and 10000 (0%-100%)")
 
 // Get returns the singleton PlatformSettings row, creating it with
 // Defaults() on first use so callers never have to special-case "not
@@ -55,6 +58,14 @@ func Update(ctx context.Context, request platformsettingspg.UpdateRequest) (res 
 		current.PlatformFeeGrosze = *request.PlatformFeeGrosze
 	}
 	if request.StripeAssumedPercentBps != nil {
+		// ComputeCheckoutAmounts (project/service/internal/payments/fee.math.go)
+		// divides by (10000 - StripeAssumedPercentBps); an out-of-range
+		// value here (>=100%, or negative) would make that denominator
+		// zero or negative, producing a nonsensical or negative checkout
+		// total quoted straight to parents.
+		if *request.StripeAssumedPercentBps < 0 || *request.StripeAssumedPercentBps >= 10000 {
+			return res, ErrInvalidPercentBps
+		}
 		current.StripeAssumedPercentBps = *request.StripeAssumedPercentBps
 	}
 	if request.StripeAssumedFixedGrosze != nil {

@@ -36,6 +36,28 @@ func Accept(ctx context.Context, token string, accepterAccountId string) (res ch
 	}
 
 	now := time.Now()
+
+	// Atomic conditional claim, not a blind write done after creating the
+	// membership: two different accounts hitting this single-use invite
+	// concurrently could otherwise both pass the IsUsable check above and
+	// both get added as a ChannelMember before either commits the
+	// "consumed" write -- only the last Update() would survive, silently
+	// leaving both accounts as members of what's meant to be a strictly
+	// 1:1 invite. Claiming the invite FIRST, gated on "still unconsumed",
+	// and checking RowsAffected, means only the caller that actually wins
+	// the race ever creates a membership at all -- mirroring the pattern
+	// already used in parentinvites.linkToInviterChildren.
+	claimResult := gormdb.GormDB.WithContext(ctx).
+		Model(&chatinvitespg.ChatInvite{}).
+		Where("id = ? AND consumed_by_account_id = ''", invite.Id).
+		Updates(map[string]interface{}{"consumed_by_account_id": accepterAccountId, "consumed_at": now})
+	if claimResult.Error != nil {
+		return res, claimResult.Error
+	}
+	if claimResult.RowsAffected == 0 {
+		return res, ErrInviteNotUsable
+	}
+
 	member := chatspg.ChannelMember{
 		Id:         uuid.NewString(),
 		ChannelId:  invite.ChannelId,
@@ -44,16 +66,6 @@ func Accept(ctx context.Context, token string, accepterAccountId string) (res ch
 		CreateTime: now,
 	}
 	if err = gormdb.Create(ctx, &member); err != nil {
-		return res, err
-	}
-
-	invite.ConsumedByAccountId = accepterAccountId
-	invite.ConsumedAt = &now
-	if err = gormdb.Update(ctx, invite, databasepg.Query{
-		Groups: []databasepg.Group{
-			{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: invite.Id}}},
-		},
-	}); err != nil {
 		return res, err
 	}
 

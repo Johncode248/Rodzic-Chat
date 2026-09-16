@@ -71,6 +71,13 @@ func ConsumePasswordReset(ctx context.Context, argument authorizationpg.ConsumeP
 				},
 			},
 		},
+		// UserId must be set even though the Query above already scopes by
+		// it -- credentials.Update falls back to *creating* a Credential
+		// row when the account has none yet (e.g. it only ever signed in
+		// via Google/Apple), and that create path requires UserId. Without
+		// it, resetting the password for an OAuth-only account failed with
+		// "missing user id".
+		UserId:   reset.AccountId,
 		Password: &argument.NewPassword,
 	}); err != nil {
 		return err

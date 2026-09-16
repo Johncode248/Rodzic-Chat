@@ -2,11 +2,14 @@ package credentials
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	credentialspg "github.com/Johncode248/Rodzic-Chat/project/common/credentials"
 )
+
+var ErrMissingUserId = errors.New("missing user id")
 
 func Update(ctx context.Context, argument credentialspg.UpdateArgument) (res credentialspg.UpdateResponse, err error) {
 	ctx = logger.Enter(ctx, "credentials.Update", argument)
@@ -22,14 +25,40 @@ func Update(ctx context.Context, argument credentialspg.UpdateArgument) (res cre
 		return res, err
 	}
 
+	// An account that only ever logged in via Google/Apple has no
+	// Credential row at all -- if the caller is trying to SET a password
+	// (Password != nil), that must create one, not silently no-op. Without
+	// this, PATCH /private/credentials returned 200 for such an account
+	// with nothing written, and the caller still couldn't log in with a
+	// password afterward.
+	if argument.Password != nil {
+		existing, selectErr := Select(ctx, credentialspg.SelectArgument{Query: argument.Query})
+		if selectErr != nil {
+			return res, selectErr
+		}
+		if len(existing.Credentials) == 0 {
+			if argument.UserId == "" {
+				return res, ErrMissingUserId
+			}
+			createResult, createErr := Create(ctx, credentialspg.CreateArgument{
+				UserId:   argument.UserId,
+				Password: *argument.Password,
+			})
+			if createErr != nil {
+				return res, createErr
+			}
+			return credentialspg.UpdateResponse{Credential: createResult.Credential}, nil
+		}
+	}
+
 	if err = InitiateUpdateMutation(ctx, usesMutation); err != nil {
 		return res, err
 	}
 
 	defer func() {
 		if err != nil {
-			if err = RollbackUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

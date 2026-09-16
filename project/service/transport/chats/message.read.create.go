@@ -33,6 +33,22 @@ func MarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
+	if err != nil || organizationId == "" {
+		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
+		return
+	}
+
+	inOrg, err := messageInOrganization(ctx, request.MessageId, organizationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !inOrg {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+		return
+	}
+
 	res, err = chats.MarkRead(ctx, chatspg.MessageReadCreateArgument{
 		MessageId: request.MessageId,
 		AccountId: accountId,

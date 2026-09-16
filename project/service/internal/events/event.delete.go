@@ -29,8 +29,8 @@ func DeleteEvent(ctx context.Context, argument eventspg.EventDeleteArgument) (re
 
 	defer func() {
 		if err != nil {
-			if err = RollbackEventDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackEventDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

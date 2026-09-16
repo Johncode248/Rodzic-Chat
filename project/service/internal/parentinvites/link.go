@@ -23,6 +23,26 @@ func linkToInviterChildren(ctx context.Context, invite parentinvitespg.ParentInv
 	ctx = logger.Enter(ctx, "parentinvites.linkToInviterChildren", invite.Id, accepterAccountId)
 	defer logger.Exit(ctx, "parentinvites.linkToInviterChildren", &res, &err)
 
+	// Atomic conditional claim, not a blind write done at the end: two
+	// different accounts hitting this single-use invite concurrently
+	// could otherwise both pass the IsUsable check (in Accept/Register,
+	// before this function runs), both run the linking loop below, and
+	// both get linked to the inviter's children before either commits a
+	// "mark consumed" step. Claiming the invite FIRST, gated on "still
+	// unconsumed", and checking RowsAffected, means only the caller that
+	// actually wins the race ever runs the loop at all.
+	now := time.Now()
+	claimResult := gormdb.GormDB.WithContext(ctx).
+		Model(&parentinvitespg.ParentInvite{}).
+		Where("token = ? AND consumed_by_account_id = ''", invite.Token).
+		Updates(map[string]interface{}{"consumed_by_account_id": accepterAccountId, "consumed_at": now})
+	if claimResult.Error != nil {
+		return res, claimResult.Error
+	}
+	if claimResult.RowsAffected == 0 {
+		return res, ErrInviteNotUsable
+	}
+
 	inviterLinks, err := parentchild.Select(ctx, parentchildpg.SelectArgument{
 		Query: databasepg.Query{Groups: []databasepg.Group{
 			{Filters: []databasepg.Filter{{Key: "parent_id", Operator: "=", Value: invite.InviterAccountId}}},
@@ -67,13 +87,6 @@ func linkToInviterChildren(ctx context.Context, invite parentinvitespg.ParentInv
 			return res, createErr
 		}
 		res.LinkedChildIds = append(res.LinkedChildIds, link.ChildId)
-	}
-
-	now := time.Now()
-	invite.ConsumedByAccountId = accepterAccountId
-	invite.ConsumedAt = &now
-	if err = gormdb.Update(ctx, &invite, byToken(invite.Token)); err != nil {
-		return res, err
 	}
 
 	return res, nil

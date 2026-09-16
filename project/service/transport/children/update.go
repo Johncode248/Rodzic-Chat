@@ -2,6 +2,7 @@ package childrengt
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
@@ -9,6 +10,8 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
+
+var errUpdateGroupNotInOrganization = errors.New("group does not belong to the caller's organization")
 
 func Update(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -32,6 +35,18 @@ func Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := request.Query.AddOrganizationAuth(organizationId)
+
+	if request.GroupId != nil && *request.GroupId != "" {
+		ok, groupErr := groupInOrganization(ctx, *request.GroupId, organizationId)
+		if groupErr != nil {
+			http.Error(w, groupErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, errUpdateGroupNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	res, err = children.Update(ctx, childrenpg.UpdateArgument{
 		Query:     query,

@@ -35,6 +35,18 @@ import (
 )
 
 func BigMigrate() {
+	ctx := context.Background()
+
+	// Serializes migrations across every process connected to this
+	// database (see AcquireMigrationLock's doc comment) -- without it, two
+	// instances booting concurrently during a rolling deploy can race
+	// AutoMigrate's own check-then-act ADD COLUMN/CREATE INDEX logic and
+	// crash-loop on a Postgres "already exists" error.
+	lockConn, err := gormdb.AcquireMigrationLock(ctx)
+	if err != nil {
+		panic(err)
+	}
+	defer gormdb.ReleaseMigrationLock(ctx, lockConn)
 
 	if err := gormdb.Migrate(context.Background(), organizationspg.Organization{}); err != nil {
 		panic(err)

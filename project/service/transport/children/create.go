@@ -11,6 +11,8 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
+var errGroupNotInOrganization = errors.New("group does not belong to the caller's organization")
+
 func Create(w http.ResponseWriter, r *http.Request) {
 	var (
 		request childrenpg.CreateRequest
@@ -30,6 +32,18 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil || organizationId == "" {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
+	}
+
+	if request.GroupId != "" {
+		ok, groupErr := groupInOrganization(ctx, request.GroupId, organizationId)
+		if groupErr != nil {
+			http.Error(w, groupErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, errGroupNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
 	}
 
 	res, err = children.Create(ctx, childrenpg.CreateArgument{

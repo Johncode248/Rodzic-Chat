@@ -4,10 +4,26 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/logger"
 )
+
+// sanitizeDownloadFilename strips characters that could break out of the
+// quoted Content-Disposition filename value or otherwise corrupt the
+// header (double quotes, backslashes, and control characters), since this
+// value ultimately comes from a client-supplied upload filename.
+func sanitizeDownloadFilename(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if r == '"' || r == '\\' || r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
 
 // downloadFilename is the name presented to the browser via
 // Content-Disposition -- pass the original uploaded filename when known
@@ -16,6 +32,10 @@ func DownloadFile(ctx context.Context, bucketName, objectName, downloadFilename 
 	ctx = logger.Enter(ctx, "api_wasabi.DownloadFile", bucketName, objectName)
 	defer logger.Exit(ctx, "api_wasabi.DownloadFile", &res, &err)
 
+	if downloadFilename == "" {
+		downloadFilename = objectName
+	}
+	downloadFilename = sanitizeDownloadFilename(downloadFilename)
 	if downloadFilename == "" {
 		downloadFilename = objectName
 	}

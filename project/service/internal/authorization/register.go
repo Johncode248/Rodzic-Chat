@@ -40,8 +40,8 @@ func Register(ctx context.Context, argument authorizationpg.RegisterArgument) (r
 
 	defer func() {
 		if err != nil {
-			if err = RollbackRegisterMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackRegisterMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

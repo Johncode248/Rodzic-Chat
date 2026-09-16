@@ -10,6 +10,7 @@ import (
 	mealspg "github.com/Johncode248/Rodzic-Chat/project/common/meals"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/meals"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists meal cancellations in the caller's organization. Staff see
@@ -105,6 +106,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = meals.Select(ctx, mealspg.SelectArgument{
 		Query: query,

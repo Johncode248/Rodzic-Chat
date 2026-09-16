@@ -30,8 +30,8 @@ func Create(ctx context.Context, argument featurespg.CreateArgument) (res featur
 
 	defer func() {
 		if err != nil {
-			if err = RollbackCreateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackCreateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

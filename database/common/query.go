@@ -9,12 +9,22 @@ type Query struct {
 
 func (q Query) ToSafe() Query {
 
-	for index1, _ := range q.Groups {
-		for index2, _ := range q.Groups[index1].Filters {
-			if q.Groups[index1].Filters[index2].Key == "user_id" {
-				q.Groups[index1].Filters = append(q.Groups[index1].Filters[:index2], q.Groups[index1].Filters[index2+1:]...)
+	for index1 := range q.Groups {
+		// Build a fresh slice rather than removing elements from
+		// q.Groups[index1].Filters while ranging over it -- mutating a
+		// slice mid-range (via append+re-slice) shifts later elements
+		// down, so the loop's own index skips whatever moved into the
+		// spot it already passed. That silently kept a "user_id" filter
+		// in place when more than one was present and it wasn't the
+		// first, defeating the whole point of this filter.
+		kept := make([]Filter, 0, len(q.Groups[index1].Filters))
+		for _, filter := range q.Groups[index1].Filters {
+			if filter.Key == "user_id" {
+				continue
 			}
+			kept = append(kept, filter)
 		}
+		q.Groups[index1].Filters = kept
 	}
 
 	q.Limit = 50

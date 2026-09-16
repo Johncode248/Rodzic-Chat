@@ -43,7 +43,11 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 
 	res, err = payments.CreateCheckoutSession(ctx, id, organizationId, accountId)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if err == payments.ErrCheckoutInProgress {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 

@@ -3,6 +3,7 @@ package transport
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/api_bucket"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
@@ -66,23 +67,35 @@ func Start() {
 	public := router.PathPrefix("/public").Subrouter()
 	private := router.PathPrefix("/private").Subrouter()
 
-	public.HandleFunc("/register", authgt.Register).Methods("POST")
+	// Authentication-sensitive endpoints previously had no request cap at
+	// all -- unlimited attempts to brute-force a password, enumerate
+	// registered emails via /password-recovery timing/response, or spam
+	// the SMTP relay via /register. Each group gets its own limiter
+	// (login attempts vs. registration vs. password-reset vs.
+	// refresh-token, which legitimate clients call far more often) rather
+	// than one shared budget across unrelated endpoints.
+	loginRateLimit := credentials.RateLimitMiddleware(20, 5*time.Minute)
+	registerRateLimit := credentials.RateLimitMiddleware(10, time.Hour)
+	passwordResetRateLimit := credentials.RateLimitMiddleware(10, 15*time.Minute)
+	refreshRateLimit := credentials.RateLimitMiddleware(60, 5*time.Minute)
+
+	public.Handle("/register", registerRateLimit(http.HandlerFunc(authgt.Register))).Methods("POST")
 	// A parent signing up entirely on their own, no director invite
 	// involved (mobile-only client-side; see
 	// authorizationpg.RegisterParentArgument's doc comment).
-	public.HandleFunc("/register/parent", authgt.RegisterParent).Methods("POST")
-	public.HandleFunc("/login", authgt.Login).Methods("POST")
+	public.Handle("/register/parent", registerRateLimit(http.HandlerFunc(authgt.RegisterParent))).Methods("POST")
+	public.Handle("/login", loginRateLimit(http.HandlerFunc(authgt.Login))).Methods("POST")
 	// Mobile-only alternate logins: Android sends a native Google Sign-In
 	// ID token, iOS sends a native Sign in with Apple identity token. Both
 	// verify the token server-side (project/service/internal/oauthverify)
 	// and match an *existing* Account by its verified email -- distinct
 	// from the /auth/google/login + /login/callback pair below, which is a
 	// browser redirect flow for the web app, not for native mobile.
-	public.HandleFunc("/login/google", authgt.LoginGoogleMobile).Methods("POST")
-	public.HandleFunc("/login/apple", authgt.LoginAppleMobile).Methods("POST")
-	public.HandleFunc("/refresh-token", authgt.RefreshToken).Methods("POST")
-	public.HandleFunc("/password-recovery", authgt.PasswordRecovery).Methods("POST")
-	public.HandleFunc("/password-reset", authgt.ConsumePasswordReset).Methods("POST")
+	public.Handle("/login/google", loginRateLimit(http.HandlerFunc(authgt.LoginGoogleMobile))).Methods("POST")
+	public.Handle("/login/apple", loginRateLimit(http.HandlerFunc(authgt.LoginAppleMobile))).Methods("POST")
+	public.Handle("/refresh-token", refreshRateLimit(http.HandlerFunc(authgt.RefreshToken))).Methods("POST")
+	public.Handle("/password-recovery", passwordResetRateLimit(http.HandlerFunc(authgt.PasswordRecovery))).Methods("POST")
+	public.Handle("/password-reset", passwordResetRateLimit(http.HandlerFunc(authgt.ConsumePasswordReset))).Methods("POST")
 
 	public.HandleFunc("/auth/google/login", authgt.LoginGoogle).Methods("GET")
 	public.HandleFunc("/auth/google/register", authgt.RegisterGoogle).Methods("GET")
@@ -310,7 +323,7 @@ func Start() {
 	// private.HandleFunc("/rspo/search", rspogt.Search).Methods("GET") -- import commented out too, see above
 
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Create))).Methods("POST")
-	private.HandleFunc("/groups", groupsgt.Select).Methods("GET")
+	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Select))).Methods("GET")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Update))).Methods("PATCH")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Delete))).Methods("DELETE")
 
@@ -421,8 +434,16 @@ func Start() {
 	private.Handle("/meals/cancellations", mealsFeature(http.HandlerFunc(mealsgt.Update))).Methods("PATCH")
 	private.Handle("/meals/cancellations", mealsFeature(http.HandlerFunc(mealsgt.Delete))).Methods("DELETE")
 
-	handler := MaxSizeMiddleware(router) // Dodajemy nasz limit
-	handler = credentials.CorsMiddleware(router)
+	// CorsMiddleware must wrap MaxSizeMiddleware(router), not router
+	// directly -- the previous version built `handler` from
+	// MaxSizeMiddleware(router) and then immediately discarded it by
+	// reassigning `handler = credentials.CorsMiddleware(router)` (wrapping
+	// the bare router again instead of the already-wrapped handler), so the
+	// 5 MB body limit was built but never actually reachable by any real
+	// request -- every /private and /public endpoint accepted a request
+	// body of unbounded size.
+	handler := MaxSizeMiddleware(router)
+	handler = credentials.CorsMiddleware(handler)
 
 	log.Println("Starting server at :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))

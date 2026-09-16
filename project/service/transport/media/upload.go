@@ -51,8 +51,9 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err = r.ParseMultipartForm(maxUploadSize); err != nil {
-		http.Error(w, "Error parsing multipart form: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Error parsing multipart form: "+err.Error(), http.StatusRequestEntityTooLarge)
 		return
 	}
 

@@ -13,9 +13,17 @@ import (
 // Password is capped at 72 bytes -- see the identical comment in
 // create.argument.go; Populate() below has the same silent-zero-value
 // footgun on a bcrypt error, so validation here is the real guard.
+// "omitempty" here only skips validation when Password itself is nil (the
+// caller isn't changing their password at all) -- a non-nil pointer, even
+// to "", is still checked against min=6, so a caller can no longer set
+// their password to an empty string by sending {"password":""}.
 type UpdateArgument struct {
-	Query    databasepg.Query `json:"query,omitempty"`
-	Password *string          `json:"password,omitempty" validate:"omitempty,max=72"`
+	Query databasepg.Query `json:"query,omitempty"`
+	// UserId is who the update is for -- used only as a fallback to CREATE a
+	// Credential row when none exists yet (see credentials.Update), since
+	// Query is a generic filter set the create path can't derive an id from.
+	UserId   string  `json:"user_id,omitempty"`
+	Password *string `json:"password,omitempty" validate:"omitempty,min=6,max=72"`
 }
 
 func (a UpdateArgument) Populate(credential Credential) Credential {

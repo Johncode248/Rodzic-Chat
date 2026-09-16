@@ -10,8 +10,12 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/caregivers"
 )
 
-// List handles GET /private/caregivers?type=&query= -- browse nannies
-// (type=1) or tutors (type=2), any authenticated account.
+// maxCaregiverListLimit bounds ?limit= the same way the message/channel-listing endpoints do.
+const maxCaregiverListLimit = 200
+
+// List handles GET /private/caregivers?type=&query=&limit=&offset= -- browse nannies
+// (type=1) or tutors (type=2), any authenticated account. limit/offset are optional; omitting
+// both keeps the previous "return everything" behavior for any existing caller.
 func List(w http.ResponseWriter, r *http.Request) {
 	var (
 		res caregiverspg.ListResponse
@@ -27,7 +31,19 @@ func List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err = caregivers.List(ctx, caregiverspg.CaregiverTypeFromOrdinal(typeOrdinal), r.URL.Query().Get("query"))
+	limit := 0
+	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
+		limit = l
+		if limit > maxCaregiverListLimit {
+			limit = maxCaregiverListLimit
+		}
+	}
+	offset := 0
+	if o, convErr := strconv.Atoi(r.URL.Query().Get("offset")); convErr == nil && o > 0 {
+		offset = o
+	}
+
+	res, err = caregivers.List(ctx, caregiverspg.CaregiverTypeFromOrdinal(typeOrdinal), r.URL.Query().Get("query"), limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

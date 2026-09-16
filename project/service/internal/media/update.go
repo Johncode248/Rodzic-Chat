@@ -28,8 +28,8 @@ func Update(ctx context.Context, argument mediapg.UpdateArgument) (res mediapg.U
 
 	defer func() {
 		if err != nil {
-			if err = RollbackUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

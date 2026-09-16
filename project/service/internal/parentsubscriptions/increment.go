@@ -8,6 +8,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	parentsubscriptionspg "github.com/Johncode248/Rodzic-Chat/project/common/parentsubscriptions"
+	"gorm.io/gorm"
 )
 
 var ErrAiLimitReached = errors.New("monthly AI token limit reached for this plan")
@@ -22,18 +23,39 @@ func IncrementUsageWithTokens(ctx context.Context, accountId string, tokens int6
 	ctx = logger.Enter(ctx, "parentsubscriptions.IncrementUsageWithTokens", accountId, tokens)
 	defer logger.Exit(ctx, "parentsubscriptions.IncrementUsageWithTokens", &res, &err)
 
-	current, err := GetOrCreate(ctx, accountId)
+	// The read-modify-write sequence below (GetOrCreate, bump both
+	// counters in memory, write back) has to be serialized per-account,
+	// otherwise two concurrent AI replies for the same account can both
+	// read the same starting counters and both write back count+1,
+	// losing one increment -- under-counting usage and letting a parent
+	// exceed MonthlyAiTokenLimit. pg_advisory_xact_lock keyed on
+	// accountId makes every concurrent call for this account queue up one
+	// at a time, mirroring the pattern already used for the per-account
+	// channel limit in chatinvites.Create.
+	err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", accountId).Error; err != nil {
+			return err
+		}
+
+		current, err := GetOrCreate(ctx, accountId)
+		if err != nil {
+			return err
+		}
+
+		current.AiRequestsUsed++
+		current.AiTokensUsed += tokens
+		current.UpdateTime = time.Now()
+
+		if err = gormdb.Update(ctx, &current, byAccountId(accountId)); err != nil {
+			return err
+		}
+
+		res = current
+		return nil
+	})
 	if err != nil {
 		return res, err
 	}
 
-	current.AiRequestsUsed++
-	current.AiTokensUsed += tokens
-	current.UpdateTime = time.Now()
-
-	if err = gormdb.Update(ctx, &current, byAccountId(accountId)); err != nil {
-		return res, err
-	}
-
-	return current, nil
+	return res, nil
 }

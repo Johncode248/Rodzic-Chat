@@ -9,8 +9,10 @@ import (
 )
 
 // List browses caregivers of one type, newest first, optionally narrowed
-// by a free-text match against the display name or city.
-func List(ctx context.Context, caregiverType caregiverspg.CaregiverType, query string) (res caregiverspg.ListResponse, err error) {
+// by a free-text match against the display name or city. limit <= 0 means
+// "no limit" (every existing caller before pagination was added), offset
+// <= 0 means "from the start".
+func List(ctx context.Context, caregiverType caregiverspg.CaregiverType, query string, limit int, offset int) (res caregiverspg.ListResponse, err error) {
 	typeFilter := databasepg.Filter{Key: "type", Operator: "=", Value: int(caregiverType)}
 
 	var groups []databasepg.Group
@@ -30,6 +32,8 @@ func List(ctx context.Context, caregiverType caregiverspg.CaregiverType, query s
 	rows, err := gormdb.Select[caregiverspg.Caregiver](ctx, databasepg.Query{
 		Groups:  groups,
 		OrderBy: databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending},
+		Limit:   limit,
+		Offset:  offset,
 	})
 	if err != nil {
 		return res, err

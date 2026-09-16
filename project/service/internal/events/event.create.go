@@ -30,8 +30,8 @@ func CreateEvent(ctx context.Context, argument eventspg.EventCreateArgument) (re
 
 	defer func() {
 		if err != nil {
-			if err = RollbackEventCreateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackEventCreateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

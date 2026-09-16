@@ -16,6 +16,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/chats"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const expiryDays = 7
@@ -50,14 +51,6 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 	ctx = logger.Enter(ctx, "chatinvites.Create", accountId)
 	defer logger.Exit(ctx, "chatinvites.Create", &invite, &channel, &err)
 
-	adminCount, err := chats.CountAdminChannels(ctx, accountId)
-	if err != nil {
-		return invite, channel, err
-	}
-	if adminCount >= MaxChannelsPerAccount {
-		return invite, channel, ErrChannelLimitReached
-	}
-
 	now := time.Now()
 	inviterName := resolveDisplayName(ctx, accountId)
 
@@ -68,10 +61,6 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 		CreateTime: now,
 		UpdateTime: now,
 	}
-	if err = gormdb.Create(ctx, &channel); err != nil {
-		return invite, channel, err
-	}
-
 	member := chatspg.ChannelMember{
 		Id:         uuid.NewString(),
 		ChannelId:  channel.Id,
@@ -79,10 +68,6 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 		Role:       chatspg.ChannelMemberRoleAdmin,
 		CreateTime: now,
 	}
-	if err = gormdb.Create(ctx, &member); err != nil {
-		return invite, channel, err
-	}
-
 	invite = chatinvitespg.ChatInvite{
 		Id:               uuid.NewString(),
 		Token:            random.GenerateToken(),
@@ -91,8 +76,43 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 		ExpiresAt:        now.AddDate(0, 0, expiryDays),
 		CreateTime:       now,
 	}
-	if err = gormdb.Create(ctx, &invite); err != nil {
-		return invite, channel, err
+
+	// The count-then-insert MaxChannelsPerAccount check has to happen
+	// inside one DB transaction serialized per-account, otherwise N
+	// concurrent Create calls for the same account can all read the same
+	// (pre-limit) count and all insert, blowing past the cap -- a classic
+	// TOCTOU race. pg_advisory_xact_lock(hashtext(accountId)) makes every
+	// concurrent call for this account queue up one at a time (auto-released
+	// when the transaction ends), so the re-count each one sees is always
+	// up to date with every insert that committed before it.
+	err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", accountId).Error; err != nil {
+			return err
+		}
+
+		var adminCount int64
+		if err := tx.Model(&chatspg.ChannelMember{}).
+			Where("account_id = ? AND role = ?", accountId, int(chatspg.ChannelMemberRoleAdmin)).
+			Count(&adminCount).Error; err != nil {
+			return err
+		}
+		if adminCount >= MaxChannelsPerAccount {
+			return ErrChannelLimitReached
+		}
+
+		if err := tx.Create(&channel).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&member).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&invite).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return chatinvitespg.ChatInvite{}, chatspg.Channel{}, err
 	}
 
 	return invite, channel, nil

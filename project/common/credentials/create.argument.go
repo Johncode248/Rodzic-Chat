@@ -13,9 +13,14 @@ import (
 // anything longer, and Populate() below silently discards that error by
 // returning a zero-value Credential (a pre-existing footgun in this file);
 // capping the input here is what actually prevents that from firing.
+// min=6 is enforced here (not just at the individual registration-request
+// structs upstream) because this is the one choke point every credential
+// creation path goes through (director register, parent-invite accept,
+// teacher/registration-link self-register) -- some of those upstream
+// structs had no length check of their own at all.
 type CreateArgument struct {
 	UserId   string `json:"user_id,omitempty" validate:"required"`
-	Password string `json:"password,omitempty" validate:"required,max=72"`
+	Password string `json:"password,omitempty" validate:"required,min=6,max=72"`
 }
 
 func (a CreateArgument) Validate() error {

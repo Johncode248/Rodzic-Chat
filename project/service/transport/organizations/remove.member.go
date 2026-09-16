@@ -53,6 +53,34 @@ func RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The target account must actually be a member of THIS organization
+	// before anything proceeds. Without this check, accountorganizations.
+	// RemoveMember's delete against (account_id, organization_id) simply
+	// no-ops for an account that was never in this org, but
+	// cascadeFullDeleteIfNoMembershipsRemain below checks GLOBALLY whether
+	// the account has zero AccountOrganization rows anywhere -- so a
+	// director in Organization A could pass the account_id of a completely
+	// unrelated parent (e.g. one with only a personal, org-less child) and
+	// trigger a full cross-tenant account deletion + session wipe for a
+	// user who was never a member of Organization A at all.
+	membership, err := accountorganizations.Select(ctx, accountorganizationspg.SelectArgument{
+		Query: databasepg.Query{
+			Limit: 1,
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{
+				{Key: "account_id", Operator: "=", Value: request.AccountId},
+				{Key: "organization_id", Operator: "=", Value: organizationId},
+			}}},
+		},
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(membership.AccountOrganizations) == 0 {
+		http.Error(w, "account is not a member of this organization", http.StatusNotFound)
+		return
+	}
+
 	if err = accountorganizations.RemoveMember(ctx, organizationId, request.AccountId); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

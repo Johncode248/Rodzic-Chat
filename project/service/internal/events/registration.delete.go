@@ -29,8 +29,8 @@ func DeleteRegistration(ctx context.Context, argument eventspg.RegistrationDelet
 
 	defer func() {
 		if err != nil {
-			if err = RollbackRegistrationDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackRegistrationDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

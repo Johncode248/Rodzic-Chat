@@ -28,8 +28,8 @@ func UpdateEvent(ctx context.Context, argument eventspg.EventUpdateArgument) (re
 
 	defer func() {
 		if err != nil {
-			if err = RollbackEventUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackEventUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

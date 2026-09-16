@@ -33,8 +33,8 @@ func Delete(ctx context.Context, argument accountspg.DeleteArgument) (res accoun
 
 	defer func() {
 		if err != nil {
-			if err = RollbackDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

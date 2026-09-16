@@ -9,6 +9,7 @@ import (
 	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/groups"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists groups in the caller's organization, optionally filtered by
@@ -39,6 +40,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "name", Direction: databasepg.DirectionAscending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = groups.Select(ctx, groupspg.SelectArgument{
 		Query: query,

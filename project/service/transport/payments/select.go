@@ -10,6 +10,7 @@ import (
 	paymentspg "github.com/Johncode248/Rodzic-Chat/project/common/payments"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/payments"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists payments in the caller's organization. Director/co-director
@@ -70,6 +71,8 @@ func Select(w http.ResponseWriter, r *http.Request) {
 
 	query := databasepg.Query{Groups: []databasepg.Group{{Filters: filters}}}
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "create_time", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = payments.Select(ctx, query)
 	if err != nil {

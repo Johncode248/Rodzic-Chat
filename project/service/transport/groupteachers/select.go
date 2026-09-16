@@ -9,6 +9,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	groupteacherspg "github.com/Johncode248/Rodzic-Chat/project/common/groupteachers"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Select lists group-teacher memberships, optionally filtered by ?group_id=
@@ -48,6 +49,14 @@ func Select(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// A brand-new organization with zero groups yet would otherwise
+		// build a "group_id IN ()" filter -- an empty IN list's behavior
+		// isn't guaranteed safe/portable across query builders, so return
+		// the (correctly) empty result directly instead of relying on it.
+		if len(groupIds) == 0 {
+			json.NewEncoder(w).Encode(groupteacherspg.SelectResponse{})
+			return
+		}
 		filters = append(filters, databasepg.Filter{Key: "group_id", Operator: "IN", Value: groupIds})
 	}
 
@@ -55,9 +64,10 @@ func Select(w http.ResponseWriter, r *http.Request) {
 		filters = append(filters, databasepg.Filter{Key: "teacher_id", Operator: "=", Value: teacherId})
 	}
 
-	result, err := gormdb.Select[groupteacherspg.GroupTeacher](ctx, databasepg.Query{
-		Groups: []databasepg.Group{{Filters: filters}},
-	})
+	gtQuery := databasepg.Query{Groups: []databasepg.Group{{Filters: filters}}}
+	gtQuery.Limit, gtQuery.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
+
+	result, err := gormdb.Select[groupteacherspg.GroupTeacher](ctx, gtQuery)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

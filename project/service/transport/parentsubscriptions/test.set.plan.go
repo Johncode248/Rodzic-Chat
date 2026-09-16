@@ -8,6 +8,7 @@ import (
 	parentsubscriptionspg "github.com/Johncode248/Rodzic-Chat/project/common/parentsubscriptions"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/parentsubscriptions"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/variables"
 )
 
 // TestSetPlan handles POST /private/parent-subscription/test-set-plan --
@@ -28,6 +29,11 @@ func TestSetPlan(w http.ResponseWriter, r *http.Request) {
 
 	ctx := logger.Enter(r.Context(), "parentsubscriptionsgt.TestSetPlan", r.Body)
 	defer logger.Exit(ctx, "parentsubscriptionsgt.TestSetPlan", &res, &err)
+
+	if !variables.AllowTestEndpoints {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Error parsing JSON request body", http.StatusBadRequest)

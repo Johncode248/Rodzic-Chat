@@ -8,7 +8,6 @@ type Token struct {
 	UserId         string `json:"userId"`
 	SessionId      string `json:"sessionId"`
 	Email          string `json:"email"`
-	CustomerId     string `json:"customerId"`
 	OrganizationId string `json:"organizationId"`
 	AccountType    int    `json:"accountType"`
 	TokenKind      string `json:"tokenKind"`

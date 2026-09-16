@@ -14,7 +14,7 @@ func DeleteFile(ctx context.Context, bucketName, objectName string) (err error) 
 	if err = ClientBucket.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{
 		ForceDelete: true,
 	}); err != nil {
-		panic(err)
+		return err
 	}
 
 	return nil

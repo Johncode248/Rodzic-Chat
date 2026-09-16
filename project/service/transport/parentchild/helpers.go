@@ -7,8 +7,10 @@ import (
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
+	parentchildpg "github.com/Johncode248/Rodzic-Chat/project/common/parentchild"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/parentchild"
 )
 
 // childInOrganization verifies that childId belongs to organizationId.
@@ -100,3 +102,56 @@ func parentInOrganization(ctx context.Context, parentId, organizationId string) 
 
 var errChildNotInOrganization = errors.New("child does not belong to the caller's organization")
 var errParentNotInOrganization = errors.New("parent account does not belong to the caller's organization")
+var errNotChildsParent = errors.New("you are not linked to this child")
+
+// parentOwnsChild reports whether accountId is linked to childId via a
+// ParentChild row -- the membership test a non-staff caller must pass
+// before seeing that child's parent-child links (e.g. who else has pickup
+// rights).
+func parentOwnsChild(ctx context.Context, accountId, childId string) (bool, error) {
+	if accountId == "" || childId == "" {
+		return false, nil
+	}
+
+	result, err := parentchild.Select(ctx, parentchildpg.SelectArgument{
+		Query: databasepg.Query{
+			Limit: 1,
+			Groups: []databasepg.Group{
+				{
+					Filters: []databasepg.Filter{
+						{Key: "parent_id", Operator: "=", Value: accountId},
+						{Key: "child_id", Operator: "=", Value: childId},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return len(result.ParentChildren) > 0, nil
+}
+
+// childIdsForParent returns every child id linked to accountId -- used to
+// scope a non-staff caller's default (no ?child_id=) /parent-child listing
+// to only their own children's links, instead of the whole organization's.
+func childIdsForParent(ctx context.Context, accountId string) ([]string, error) {
+	result, err := parentchild.Select(ctx, parentchildpg.SelectArgument{
+		Query: databasepg.Query{
+			Groups: []databasepg.Group{
+				{Filters: []databasepg.Filter{{Key: "parent_id", Operator: "=", Value: accountId}}},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(result.ParentChildren))
+	for _, pc := range result.ParentChildren {
+		ids = append(ids, pc.ChildId)
+	}
+
+	return ids, nil
+}

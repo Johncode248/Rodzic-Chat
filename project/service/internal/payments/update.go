@@ -51,20 +51,37 @@ func Update(ctx context.Context, id, organizationId, actingAccountId string, req
 		return res, ErrCannotEditNonUnpaidPayment
 	}
 
+	// Collected into a narrow, column-scoped update below (not
+	// gormdb.Update(ctx, &payment, query), which does a full-row
+	// Select("*").Updates(model) overwrite using this in-memory `payment`
+	// struct) -- a full-row write here would silently clobber any column
+	// a CONCURRENT write touched that this request didn't intend to
+	// change, e.g. CreateCheckoutSession attaching a live
+	// stripe_checkout_session_id/payment_method while this staff edit was
+	// in flight, or ApplyCheckoutCompleted marking the payment Paid. Only
+	// writing the columns this function actually computed leaves any such
+	// concurrent change to other columns intact. Mirrors the same fix
+	// already applied to payments.CreateCheckoutSession.
+	changes := map[string]interface{}{}
+
 	if request.Title != nil {
 		payment.Title = *request.Title
+		changes["title"] = payment.Title
 	}
 	if request.Description != nil {
 		payment.Description = *request.Description
+		changes["description"] = payment.Description
 	}
 	if request.BaseAmountGrosze != nil {
 		if *request.BaseAmountGrosze <= 0 {
 			return res, ErrInvalidAmount
 		}
 		payment.BaseAmountGrosze = *request.BaseAmountGrosze
+		changes["base_amount_grosze"] = payment.BaseAmountGrosze
 	}
 	if request.DueDate != nil {
 		payment.DueDate = request.DueDate
+		changes["due_date"] = payment.DueDate
 	}
 
 	if request.Status != nil {
@@ -75,30 +92,41 @@ func Update(ctx context.Context, id, organizationId, actingAccountId string, req
 
 		now := time.Now()
 		payment.Status = status
+		changes["status"] = payment.Status
 
 		switch status {
 		case paymentspg.PaymentStatusPaid:
 			if payment.PaidAt == nil {
 				payment.PaidAt = &now
+				changes["paid_at"] = payment.PaidAt
 			}
 		case paymentspg.PaymentStatusReconciled:
 			payment.ReconciledAt = &now
 			payment.ReconciledBy = actingAccountId
+			changes["reconciled_at"] = payment.ReconciledAt
+			changes["reconciled_by"] = payment.ReconciledBy
 			// A payment reconciled straight from Unpaid (no online checkout
 			// ever created) was necessarily settled outside the app -- a
 			// bank transfer, per product direction, which is why it never
 			// picked up an online PaymentMethod along the way.
 			if payment.PaymentMethod == paymentspg.PaymentMethodUnset {
 				payment.PaymentMethod = paymentspg.PaymentMethodBankTransfer
+				changes["payment_method"] = payment.PaymentMethod
 			}
 			if payment.PaidAt == nil {
 				payment.PaidAt = &now
+				changes["paid_at"] = payment.PaidAt
 			}
 		}
 	}
 
-	if err = gormdb.Update(ctx, &payment, query); err != nil {
-		return res, err
+	if len(changes) > 0 {
+		changes["update_time"] = time.Now()
+		if err = gormdb.GormDB.WithContext(ctx).Model(&paymentspg.Payment{}).
+			Where("id = ? AND organization_id = ?", id, organizationId).
+			Updates(changes).Error; err != nil {
+			return res, err
+		}
 	}
 
 	res.Payment = payment

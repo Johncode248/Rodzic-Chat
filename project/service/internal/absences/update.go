@@ -2,11 +2,20 @@ package absences
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	absencespg "github.com/Johncode248/Rodzic-Chat/project/common/absences"
 )
+
+// ErrInvalidDateRange mirrors CreateArgument.Validate's "date_to must not
+// be before date_from" check -- Update's DateFrom/DateTo are independently
+// optional (a partial patch), so the same check can't live in
+// UpdateArgument.Validate() itself (it only sees whichever of the two
+// fields were actually sent, not the existing row's other date); it has to
+// run after Populate() below merges the patch onto the existing row.
+var ErrInvalidDateRange = errors.New("date_to must not be before date_from")
 
 func Update(ctx context.Context, argument absencespg.UpdateArgument) (res absencespg.UpdateResponse, err error) {
 	ctx = logger.Enter(ctx, "absences.Update", argument)
@@ -28,8 +37,8 @@ func Update(ctx context.Context, argument absencespg.UpdateArgument) (res absenc
 
 	defer func() {
 		if err != nil {
-			if err = RollbackUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()
@@ -57,6 +66,10 @@ func InitiateUpdateMutation(ctx context.Context, mutation *absencespg.UpdateMuta
 	}
 
 	updateAbsence := mutation.Foundation.Populate(result.Absences[0])
+
+	if updateAbsence.DateTo.Before(updateAbsence.DateFrom) {
+		return ErrInvalidDateRange
+	}
 
 	mutation.Transient = absencespg.Transient{
 		Current: result.Absences[0],

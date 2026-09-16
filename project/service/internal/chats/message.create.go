@@ -171,6 +171,79 @@ func requireParentInGroup(ctx context.Context, groupId, senderId string) error {
 	return nil
 }
 
+// CheckReadPermission implements the per-channel-type read rule, mirroring
+// checkPostingPermission but for reads: staff (any type) may read every
+// channel in their organization. A parent may freely read Announcement/
+// Direct channels and organization-wide Group channels (GroupId == ""), but
+// a Group/Parents channel tied to a specific GroupId requires the parent to
+// actually have a child in that group -- without this, any parent could
+// read another class's messages, reactions, read-receipts and polls just by
+// knowing/guessing that channel's id.
+func CheckReadPermission(ctx context.Context, channel chatspg.Channel, accountId string, accountType int) error {
+	isStaff := accountType == accountspg.AccountTypeDirector.Ordinal() || accountType == accountspg.AccountTypeCoDirector.Ordinal() || accountType == accountspg.AccountTypeTeacher.Ordinal()
+	if isStaff {
+		return nil
+	}
+
+	switch channel.Type {
+	case chatspg.ChannelTypeGroup, chatspg.ChannelTypeParents:
+		if channel.GroupId == "" {
+			return nil
+		}
+		return requireParentInGroup(ctx, channel.GroupId, accountId)
+	default:
+		return nil
+	}
+}
+
+// ParentGroupIds returns the distinct group ids of every child linked to
+// accountId as a parent -- used to bulk-filter a channel list down to the
+// groups that parent may actually see, without one requireParentInGroup
+// query per channel.
+func ParentGroupIds(ctx context.Context, accountId string) ([]string, error) {
+	linkResult, err := parentchild.Select(ctx, parentchildpg.SelectArgument{
+		Query: databasepg.Query{
+			Groups: []databasepg.Group{
+				{Filters: []databasepg.Filter{{Key: "parent_id", Operator: "=", Value: accountId}}},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	childIds := make([]string, 0, len(linkResult.ParentChildren))
+	for _, pc := range linkResult.ParentChildren {
+		childIds = append(childIds, pc.ChildId)
+	}
+	if len(childIds) == 0 {
+		return nil, nil
+	}
+
+	childrenResult, err := children.Select(ctx, childrenpg.SelectArgument{
+		Query: databasepg.Query{
+			Groups: []databasepg.Group{
+				{Filters: []databasepg.Filter{{Key: "id", Operator: "IN", Value: childIds}}},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	groupIds := make([]string, 0, len(childrenResult.Children))
+	for _, child := range childrenResult.Children {
+		if child.GroupId == "" || seen[child.GroupId] {
+			continue
+		}
+		seen[child.GroupId] = true
+		groupIds = append(groupIds, child.GroupId)
+	}
+
+	return groupIds, nil
+}
+
 func checkRateLimit(ctx context.Context, channelId, senderId string) error {
 	since := time.Now().Add(-rateLimitWindow)
 

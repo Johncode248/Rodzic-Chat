@@ -10,6 +10,7 @@ import (
 	authorizationpg "github.com/Johncode248/Rodzic-Chat/project/common/authorization"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // Roster lists every account in the caller's organization (staff-only --
@@ -83,6 +84,8 @@ func Roster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "name", Direction: databasepg.DirectionAscending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	if removed {
 		res, err = accounts.SelectUnscoped(ctx, accountspg.SelectArgument{Query: query})

@@ -2,7 +2,6 @@ package authorization
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/smtp"
 	"time"
@@ -47,7 +46,13 @@ func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
 	}
 
 	if len(accountlist.Accounts) == 0 {
-		return errors.New("no accounts found")
+		// Deliberately a silent no-op, not an error: returning a different
+		// result (and the transport layer a different HTTP status, see
+		// authgt.PasswordRecovery) for "no such account" vs "email sent"
+		// lets anyone enumerate which emails are registered by watching the
+		// response. The password-recovery endpoint must look identical
+		// either way.
+		return nil
 	}
 
 	rawToken := random.GenerateToken()

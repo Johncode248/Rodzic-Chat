@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Johncode248/Rodzic-Chat/variables"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -12,9 +13,7 @@ var GormDB *gorm.DB
 
 func init() {
 
-	dsn := "host=localhost port=5432 user=staszek password= dbname=staszek sslmode=disable connect_timeout=15"
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(variables.DatabaseURL), &gorm.Config{
 		PrepareStmt: false,
 	})
 	if err != nil {

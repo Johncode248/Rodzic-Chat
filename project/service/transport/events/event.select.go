@@ -10,6 +10,7 @@ import (
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/events"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
+	"github.com/Johncode248/Rodzic-Chat/project/service/transport/pagination"
 )
 
 // SelectEvents lists events in the caller's organization, optionally
@@ -99,6 +100,8 @@ func SelectEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query = query.AddOrganizationAuth(organizationId)
+	query.OrderBy = databasepg.Order{Key: "event_date", Direction: databasepg.DirectionDescending}
+	query.Limit, query.Offset = pagination.Parse(r, pagination.DefaultMaxLimit)
 
 	res, err = events.SelectEvents(ctx, eventspg.EventSelectArgument{Query: query})
 	if err != nil {

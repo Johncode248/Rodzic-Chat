@@ -29,8 +29,8 @@ func Delete(ctx context.Context, argument childrenpg.DeleteArgument) (res childr
 
 	defer func() {
 		if err != nil {
-			if err = RollbackDeleteMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackDeleteMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()

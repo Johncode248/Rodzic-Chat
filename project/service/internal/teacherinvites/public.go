@@ -6,6 +6,7 @@ import (
 	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/library/expressions"
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
@@ -187,12 +188,23 @@ func PublicRegister(ctx context.Context, argument teacherinvitespg.PublicRegiste
 		}
 	}
 
+	// Atomic conditional update, not a blind write: two concurrent
+	// requests for the same single-use token could otherwise both pass
+	// the "UsedAt == nil" check above and both create an account before
+	// either commits this update. Gating the UPDATE itself on "still
+	// unused" and checking RowsAffected makes this the real enforcement
+	// point -- only the first caller to actually reach it wins.
 	now := time.Now()
-	if _, err = Update(ctx, teacherinvitespg.UpdateArgument{
-		Query:  byToken(argument.Token),
-		UsedAt: &now,
-	}); err != nil {
-		return res, err
+	updateResult := gormdb.GormDB.WithContext(ctx).
+		Model(&teacherinvitespg.TeacherInvite{}).
+		Where("token = ? AND used_at IS NULL", argument.Token).
+		Update("used_at", now)
+	if updateResult.Error != nil {
+		return res, updateResult.Error
+	}
+	if updateResult.RowsAffected == 0 {
+		_ = rollbackPartialAccountCreate(ctx, accountId)
+		return res, ErrInviteAlreadyUsed
 	}
 
 	return teacherinvitespg.PublicRegisterResponse{

@@ -28,8 +28,8 @@ func UpdateRegistration(ctx context.Context, argument eventspg.RegistrationUpdat
 
 	defer func() {
 		if err != nil {
-			if err = RollbackRegistrationUpdateMutation(ctx, usesMutation); err != nil {
-				panic(err)
+			if rollbackErr := RollbackRegistrationUpdateMutation(ctx, usesMutation); rollbackErr != nil {
+				panic(rollbackErr)
 			}
 		}
 	}()
