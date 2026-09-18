@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
+	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/credentials"
 )
 
@@ -28,6 +31,25 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// route for up to 30 days instead of the intended 24h.
 		if token.TokenKind != "access" {
 			http.Error(w, "Invalid token type", http.StatusUnauthorized)
+			return
+		}
+
+		// Access tokens are stateless, so a token minted for an account that
+		// has since been deleted (or lives in another database) would still
+		// verify and then fail deep inside a handler on a foreign key. Reject
+		// it here with 401 so the client re-authenticates instead.
+		accounts, err := gormdb.Select[accountspg.Account](r.Context(), databasepg.Query{
+			Limit: 1,
+			Groups: []databasepg.Group{
+				{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: token.UserId}}},
+			},
+		})
+		if err != nil {
+			http.Error(w, "Error verifying account", http.StatusInternalServerError)
+			return
+		}
+		if len(accounts) == 0 {
+			http.Error(w, "Account no longer exists", http.StatusUnauthorized)
 			return
 		}
 
