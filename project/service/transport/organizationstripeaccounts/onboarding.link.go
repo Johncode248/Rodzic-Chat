@@ -32,8 +32,8 @@ func OnboardingLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	returnURL := fmt.Sprintf("%s/settings/organization?stripe=return", variables.DOMEIN_F)
-	refreshURL := fmt.Sprintf("%s/settings/organization?stripe=refresh", variables.DOMEIN_F)
+	returnURL := fmt.Sprintf("%s/settings/organization?stripe=return", variables.FrontendURL)
+	refreshURL := fmt.Sprintf("%s/settings/organization?stripe=refresh", variables.FrontendURL)
 
 	res, err = organizationstripeaccounts.EnsureOnboardingLink(ctx, organizationId, returnURL, refreshURL)
 	if err != nil {

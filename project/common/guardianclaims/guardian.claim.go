@@ -1,6 +1,11 @@
 package guardianclaimspg
 
-import "time"
+import (
+	"time"
+
+	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 // GuardianClaim exists because pure name-matching (see
 // findOrCreateChild in registrationlinks) lets anyone holding a group's
@@ -15,10 +20,12 @@ import "time"
 // rows instead, and a director must explicitly approve or reject it before
 // any ParentChild row (and the pickup rights that come with it) is created.
 type GuardianClaim struct {
-	Id             string `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string `json:"organization_id,omitempty" gorm:"not null;index"`
-	ChildId        string `json:"child_id,omitempty" gorm:"not null;index"`
-	ClaimantId     string `json:"claimant_id,omitempty" gorm:"not null"`
+	Id             string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization   *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	ChildId        string                        `json:"child_id,omitempty" gorm:"not null;index"`
+	Child          *childrenpg.Child             `json:"-" gorm:"foreignKey:ChildId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	ClaimantId     string                        `json:"claimant_id,omitempty" gorm:"not null"`
 	// ClaimantName/Email are a snapshot of what the claimant submitted at
 	// registration time -- kept alongside the account row so the director
 	// review screen doesn't need extra joins and still makes sense even if

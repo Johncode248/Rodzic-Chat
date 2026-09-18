@@ -13,7 +13,7 @@ import (
 var googleOAuthConfig2 = &oauth2.Config{
 	ClientID:     variables.GoogleOAuthClientId,
 	ClientSecret: variables.GoogleOAuthClientSecret,
-	RedirectURL:  fmt.Sprintf("%s%s", variables.DOMEIN_B, "/register/callback"),
+	RedirectURL:  fmt.Sprintf("%s%s", variables.BackendURL, "/register/callback"),
 	Scopes: []string{
 		"openid",
 		"email",

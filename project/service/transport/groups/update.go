@@ -47,7 +47,6 @@ func Update(w http.ResponseWriter, r *http.Request) {
 		Query:                             request.Query.AddOrganizationAuth(organizationId),
 		Name:                              request.Name,
 		TeacherId:                         request.TeacherId,
-		AgeRange:                          request.AgeRange,
 		RequireChildBirthDateVerification: request.RequireChildBirthDateVerification,
 	})
 	if err != nil {

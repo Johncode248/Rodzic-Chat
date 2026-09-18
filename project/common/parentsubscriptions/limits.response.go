@@ -7,9 +7,8 @@ package parentsubscriptionspg
 type LimitsResponse struct {
 	Plan string `json:"plan,omitempty"`
 
-	AiTokensUsed  int64  `json:"ai_tokens_used"`
-	AiTokensLimit int64  `json:"ai_tokens_limit"`
-	PeriodResetAt string `json:"period_reset_at,omitempty"`
+	AiTokensUsed  int64 `json:"ai_tokens_used"`
+	AiTokensLimit int64 `json:"ai_tokens_limit"`
 
 	RecommendationsUsed  int64 `json:"recommendations_used"`
 	RecommendationsLimit int64 `json:"recommendations_limit"`

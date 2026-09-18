@@ -54,10 +54,7 @@ func TestSetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = parentsubscriptionspg.StatusResponse{
-		Plan:            subscription.Plan.String(),
-		AiRequestsUsed:  subscription.AiRequestsUsed,
-		AiRequestsLimit: parentsubscriptionspg.MonthlyAiRequestLimit(subscription.Plan),
-		PeriodResetAt:   subscription.PeriodResetAt.Format("2006-01-02"),
+		Plan: subscription.Plan.String(),
 	}
 
 	json.NewEncoder(w).Encode(res)

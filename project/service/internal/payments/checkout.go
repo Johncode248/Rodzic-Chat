@@ -121,8 +121,8 @@ func CreateCheckoutSession(ctx context.Context, paymentId, organizationId, paren
 
 	amounts := ComputeCheckoutAmounts(payment.BaseAmountGrosze, settings)
 
-	successURL := fmt.Sprintf("%s/platnosci/potwierdzenie?session_id={CHECKOUT_SESSION_ID}", variables.DOMEIN_F)
-	cancelURL := fmt.Sprintf("%s/platnosci/anulowano?payment_id=%s", variables.DOMEIN_F, payment.Id)
+	successURL := fmt.Sprintf("%s/platnosci/potwierdzenie?session_id={CHECKOUT_SESSION_ID}", variables.FrontendURL)
+	cancelURL := fmt.Sprintf("%s/platnosci/anulowano?payment_id=%s", variables.FrontendURL, payment.Id)
 
 	productData := &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
 		Name: stripe.String(payment.Title),

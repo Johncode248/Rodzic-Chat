@@ -21,6 +21,7 @@ import (
 	childrengt "github.com/Johncode248/Rodzic-Chat/project/service/transport/children"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 	dashboardgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/dashboard"
+	devicetokensgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/devicetokens"
 	eventsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/events"
 	featuresgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/features"
 	groupsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/groups"
@@ -154,6 +155,12 @@ func Start() {
 	private.HandleFunc("/accounts", accountsgt.Context).Methods("GET")
 	private.HandleFunc("/accounts", accountsgt.Delete).Methods("DELETE")
 	private.HandleFunc("/accounts", accountsgt.Update).Methods("PATCH")
+
+	// Push notification device tokens: registered on login/app launch,
+	// unregistered on logout. Any authenticated account, no feature gate --
+	// this backs the chat push notifications, not a toggleable module.
+	private.HandleFunc("/device-tokens", devicetokensgt.Register).Methods("POST")
+	private.HandleFunc("/device-tokens", devicetokensgt.Unregister).Methods("DELETE")
 
 	// Organizations: create is director-only (a director already gets an
 	// organization via /register, this is exposed for completeness); read/update/

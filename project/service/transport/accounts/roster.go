@@ -59,7 +59,7 @@ func Roster(w http.ResponseWriter, r *http.Request) {
 		// AddOrganizationAuth's existing "append to every group" behavior.
 		query.Groups = []databasepg.Group{
 			{Filters: []databasepg.Filter{{Key: "name", Operator: "ILIKE", Value: like}}},
-			{Filters: []databasepg.Filter{{Key: "login", Operator: "ILIKE", Value: like}}},
+			{Filters: []databasepg.Filter{{Key: "email", Operator: "ILIKE", Value: like}}},
 			{Filters: []databasepg.Filter{{Key: "email", Operator: "ILIKE", Value: like}}},
 		}
 		if accountTypeFilter != nil {

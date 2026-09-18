@@ -1,15 +1,19 @@
 package chatsgt
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	chatspg "github.com/Johncode248/Rodzic-Chat/project/common/chats"
 	featurespg "github.com/Johncode248/Rodzic-Chat/project/common/features"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/accounts"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/chats"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/features"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/push"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
@@ -99,4 +103,64 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(res)
+
+	// Push notification: best-effort, fire-and-forget on its own context
+	// (the request's r.Context() is cancelled the instant this handler
+	// returns, which just did) so a slow FCM call can't hang the response
+	// and a failed one can never turn a sent message into an error.
+	go notifyNewMessage(channelResult.Channels[0], accountId, res.Message, "")
+}
+
+// bodyOverride replaces "{sender name}: {message content}" wholesale when
+// non-empty -- used by poll.create.go, whose Message.Content is always
+// blank (the question lives on the Poll row, not the Message).
+func notifyNewMessage(channel chatspg.Channel, senderId string, message chatspg.Message, bodyOverride string) {
+	ctx := context.Background()
+
+	recipientIds, err := chats.Recipients(ctx, channel)
+	if err != nil {
+		return
+	}
+
+	targets := make([]string, 0, len(recipientIds))
+	for _, id := range recipientIds {
+		if id != senderId {
+			targets = append(targets, id)
+		}
+	}
+	if len(targets) == 0 {
+		return
+	}
+
+	senderName := "Ktoś"
+	if senderResult, err := accounts.Select(ctx, accountspg.SelectArgument{
+		Query: databasepg.Query{
+			Limit:  1,
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: senderId}}}},
+		},
+	}); err == nil && len(senderResult.Accounts) > 0 {
+		senderName = senderResult.Accounts[0].Name
+	}
+
+	title := channel.Name
+	body := message.Content
+	if channel.Type == chatspg.ChannelTypeDirect {
+		title = senderName
+	} else {
+		body = senderName + ": " + message.Content
+	}
+	if bodyOverride != "" {
+		body = senderName + " " + bodyOverride
+	} else if body == "" || body == senderName+": " {
+		body = senderName + " wysłał(a) załącznik"
+	}
+	const maxBodyLen = 160
+	if len(body) > maxBodyLen {
+		body = body[:maxBodyLen] + "…"
+	}
+
+	push.SendToAccounts(ctx, targets, title, body, map[string]string{
+		"type":       "chat_message",
+		"channel_id": channel.Id,
+	})
 }

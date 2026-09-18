@@ -79,10 +79,9 @@ func linkToInviterChildren(ctx context.Context, invite parentinvitespg.ParentInv
 		}
 
 		if _, createErr := parentchild.Create(ctx, parentchildpg.CreateArgument{
-			ParentId:  accepterAccountId,
-			ChildId:   link.ChildId,
-			Relation:  parentchildpg.RelationTypeGuardian,
-			CanPickup: true,
+			ParentId: accepterAccountId,
+			ChildId:  link.ChildId,
+			Relation: parentchildpg.RelationTypeGuardian,
 		}); createErr != nil {
 			return res, createErr
 		}

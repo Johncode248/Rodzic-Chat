@@ -44,7 +44,7 @@ func Login(ctx context.Context, argument authorizationpg.LoginArgument) (res aut
 			{
 				Filters: []databasepg.Filter{
 					{
-						Key:      "login",
+						Key:      "email",
 						Operator: "=",
 						Value:    argument.Login,
 					},
@@ -94,7 +94,7 @@ func Login(ctx context.Context, argument authorizationpg.LoginArgument) (res aut
 
 	issued, err := credentials.IssueTokens(ctx, credentials.IssueTokensArgument{
 		AccountId:  accountList[0].Id,
-		Email:      accountList[0].Login,
+		Email:      accountList[0].Email,
 		DeviceId:   argument.DeviceId,
 		DeviceName: argument.DeviceName,
 		UserAgent:  argument.UserAgent,

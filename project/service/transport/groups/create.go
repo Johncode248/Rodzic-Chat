@@ -50,7 +50,6 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		OrganizationId:                    organizationId,
 		Name:                              request.Name,
 		TeacherId:                         request.TeacherId,
-		AgeRange:                          request.AgeRange,
 		RequireChildBirthDateVerification: request.RequireChildBirthDateVerification,
 	})
 	if err != nil {

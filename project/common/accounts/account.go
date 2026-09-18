@@ -7,14 +7,16 @@ import (
 )
 
 type Account struct {
-	Id             string      `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string      `json:"organization_id,omitempty" gorm:"index"`
-	Name           string      `json:"name,omitempty" gorm:"not null"`
-	Login          string      `json:"login,omitempty" gorm:"unique; not null"`
-	Email          string      `json:"email,omitempty" gorm:"index"`
-	Phone          string      `json:"phone,omitempty"`
-	AccountType    AccountType `json:"account_type,omitempty" gorm:"not null"`
-	Status         Status      `json:"status,omitempty" gorm:"not null"`
+	Id             string `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string `json:"organization_id,omitempty" gorm:"index"`
+	Name           string `json:"name,omitempty" gorm:"not null"`
+	// Email is the sole login key -- every account authenticates against
+	// it (see project/service/internal/authorization.Login), so it's
+	// unique+not null just like the old Login column used to be.
+	Email       string      `json:"email,omitempty" gorm:"unique;not null"`
+	Phone       string      `json:"phone,omitempty"`
+	AccountType AccountType `json:"account_type,omitempty" gorm:"not null"`
+	Status      Status      `json:"status,omitempty" gorm:"not null"`
 	// Permissions grants a Teacher account specific extra capabilities
 	// (e.g. PermissionManagePayments) beyond what AccountType alone allows.
 	// Always 0 for Parent accounts; irrelevant for Director/CoDirector,

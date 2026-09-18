@@ -14,8 +14,7 @@ type CreateArgument struct {
 	Id             string      `json:"id,omitempty"`
 	OrganizationId string      `json:"organization_id,omitempty"`
 	Name           string      `json:"name,omitempty" validate:"required,max=128"`
-	Login          string      `json:"login,omitempty" validate:"required,max=128"`
-	Email          string      `json:"email,omitempty" validate:"omitempty,email,max=128"`
+	Email          string      `json:"email,omitempty" validate:"required,email,max=128"`
 	Phone          string      `json:"phone,omitempty"`
 	AccountType    AccountType `json:"account_type,omitempty"`
 	Status         Status      `json:"status,omitempty"`
@@ -37,7 +36,6 @@ func (a CreateArgument) Populate() (account Account) {
 	account.Id = expressions.Select(a.Id != "", a.Id, uuid.NewString())
 	account.OrganizationId = a.OrganizationId
 	account.Name = a.Name
-	account.Login = a.Login
 	account.Email = a.Email
 	account.Phone = a.Phone
 	account.AccountType = a.AccountType

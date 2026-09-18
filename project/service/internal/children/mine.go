@@ -43,10 +43,9 @@ func CreateMine(ctx context.Context, argument childrenpg.CreateMineArgument) (re
 	}
 
 	if _, err = parentchild.Create(ctx, parentchildpg.CreateArgument{
-		ParentId:  argument.ParentAccountId,
-		ChildId:   child.Id,
-		Relation:  parentchildpg.RelationTypeGuardian,
-		CanPickup: true,
+		ParentId: argument.ParentAccountId,
+		ChildId:  child.Id,
+		Relation: parentchildpg.RelationTypeGuardian,
 	}); err != nil {
 		return res, err
 	}

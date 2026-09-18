@@ -8,11 +8,8 @@ type Organization struct {
 	Id                 string             `json:"id,omitempty" gorm:"primaryKey"`
 	Name               string             `json:"name,omitempty" gorm:"not null"`
 	Type               OrganizationType   `json:"type,omitempty" gorm:"not null"`
-	Subdomain          string             `json:"subdomain,omitempty" gorm:"unique; not null"`
 	Address            string             `json:"address,omitempty"`
 	Nip                string             `json:"nip,omitempty"`
-	LogoUrl            string             `json:"logo_url,omitempty"`
-	PrimaryColor       string             `json:"primary_color,omitempty"`
 	SubscriptionStatus SubscriptionStatus `json:"subscription_status,omitempty" gorm:"not null"`
 	SubscriptionPlan   string             `json:"subscription_plan,omitempty"`
 	// ChildrenLimit is the capacity tier the director picked at registration

@@ -13,7 +13,6 @@ type EventUpdateArgument struct {
 	Query                databasepg.Query `json:"query,omitempty" validate:"required"`
 	Title                *string          `json:"title,omitempty" validate:"omitempty,max=128"`
 	Description          *string          `json:"description,omitempty"`
-	RequiresConsent      *bool            `json:"requires_consent,omitempty"`
 	RequiresItem         *string          `json:"requires_item,omitempty"`
 	EventDate            *time.Time       `json:"event_date,omitempty"`
 	RegistrationDeadline *time.Time       `json:"registration_deadline,omitempty"`
@@ -29,10 +28,6 @@ func (a EventUpdateArgument) Populate(event Event) Event {
 
 	if a.Description != nil {
 		event.Description = *a.Description
-	}
-
-	if a.RequiresConsent != nil {
-		event.RequiresConsent = *a.RequiresConsent
 	}
 
 	if a.RequiresItem != nil {

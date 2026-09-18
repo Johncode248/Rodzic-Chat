@@ -110,7 +110,6 @@ func FinalizeRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 	organizationResult, err := organizations.Create(ctx, organizationspg.CreateArgument{
 		Name:          mutation.Foundation.OrganizationName,
 		Type:          organizationType,
-		Subdomain:     mutation.Foundation.OrganizationSubdomain,
 		ChildrenLimit: mutation.Foundation.OrganizationChildrenLimit,
 	})
 	if err != nil {
@@ -135,7 +134,6 @@ func FinalizeRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 					accountResult, err := accounts.Create(ctx, accountspg.CreateArgument{
 						Id:             accountId,
 						Name:           mutation.Foundation.Name,
-						Login:          mutation.Foundation.Email,
 						Email:          mutation.Foundation.Email,
 						Phone:          mutation.Foundation.Phone,
 						OrganizationId: organizationId,
@@ -175,7 +173,7 @@ func FinalizeRegisterMutation(ctx context.Context, mutation *authorizationpg.Reg
 
 	issued, err := credentials.IssueTokens(ctx, credentials.IssueTokensArgument{
 		AccountId: mutation.Condition.Account.Id,
-		Email:     mutation.Condition.Account.Login,
+		Email:     mutation.Condition.Account.Email,
 	})
 	if err != nil {
 		return err

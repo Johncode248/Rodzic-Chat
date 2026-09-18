@@ -148,9 +148,8 @@ func marshalOrError(v any) (string, bool) {
 // keeps asking to call a tool (up to maxToolRounds), run that tool and feed the result back,
 // until it produces a final text answer. history is the client-managed conversation so far,
 // ending with the parent's new turn. tokensUsed sums every round's input+output tokens (see
-// anthropicUsage.TotalTokens) -- the real enforcement metric for the parent's AI usage cap (see
-// parentsubscriptionspg.AiTokensUsed), since a tool-heavy conversation can cost several times
-// what a plain Q&A does.
+// anthropicUsage.TotalTokens); this endpoint is hard-disabled server-side for MVP (see
+// project/service/transport/aichat.Send), so nothing currently reads tokensUsed for enforcement.
 func converseWithTools(ctx context.Context, systemPrompt string, history []aichatpg.ChatMessage) (reply string, tokensUsed int64, err error) {
 	messages := make([]anthropicMessage, 0, len(history))
 	for _, m := range history {

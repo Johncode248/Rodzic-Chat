@@ -54,7 +54,6 @@ func UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		Query:                query,
 		Title:                request.Title,
 		Description:          request.Description,
-		RequiresConsent:      request.RequiresConsent,
 		RequiresItem:         request.RequiresItem,
 		EventDate:            request.EventDate,
 		RegistrationDeadline: request.RegistrationDeadline,

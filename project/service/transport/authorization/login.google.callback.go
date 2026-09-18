@@ -91,7 +91,7 @@ func GoogleCallbackLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	issued, err := credentials.IssueTokens(ctx, credentials.IssueTokensArgument{
 		AccountId: accountList[0].Id,
-		Email:     accountList[0].Login,
+		Email:     accountList[0].Email,
 		UserAgent: r.UserAgent(),
 		IpAddress: r.RemoteAddr,
 	})
@@ -107,5 +107,5 @@ func GoogleCallbackLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// history, server logs, and any analytics script reading
 	// location.href. The frontend must read window.location.hash and then
 	// call history.replaceState to scrub it immediately.
-	http.Redirect(w, r, fmt.Sprintf("%s/dashboard#access_token=%s&refresh_token=%s", variables.DOMEIN_F, issued.AccessToken, issued.RefreshToken), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/dashboard#access_token=%s&refresh_token=%s", variables.FrontendURL, issued.AccessToken, issued.RefreshToken), http.StatusFound)
 }

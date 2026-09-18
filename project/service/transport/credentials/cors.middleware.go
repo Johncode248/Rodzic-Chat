@@ -22,8 +22,8 @@ var allowedOrigins = buildAllowedOrigins()
 
 func buildAllowedOrigins() map[string]bool {
 	origins := map[string]bool{}
-	if variables.DOMEIN_F != "" {
-		origins[variables.DOMEIN_F] = true
+	if variables.FrontendURL != "" {
+		origins[variables.FrontendURL] = true
 	}
 	for _, o := range strings.Split(variables.CORSAllowedOrigins, ",") {
 		o = strings.TrimSpace(o)

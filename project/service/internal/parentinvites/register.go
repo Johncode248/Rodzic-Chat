@@ -34,7 +34,7 @@ func Register(ctx context.Context, token string, req parentinvitespg.RegisterReq
 
 	existing, err := accounts.Select(ctx, accountspg.SelectArgument{
 		Query: databasepg.Query{Limit: 1, Groups: []databasepg.Group{
-			{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: req.Email}}},
+			{Filters: []databasepg.Filter{{Key: "email", Operator: "=", Value: req.Email}}},
 		}},
 	})
 	if err != nil {
@@ -48,7 +48,6 @@ func Register(ctx context.Context, token string, req parentinvitespg.RegisterReq
 	if _, err = accounts.Create(ctx, accountspg.CreateArgument{
 		Id:          accountId,
 		Name:        req.Name,
-		Login:       req.Email,
 		Email:       req.Email,
 		AccountType: accountspg.AccountTypeParent,
 		Status:      accountspg.StatusEnabled,

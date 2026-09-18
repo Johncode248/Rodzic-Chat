@@ -11,11 +11,10 @@ import (
 )
 
 type CreateArgument struct {
-	Id        string       `json:"id,omitempty"`
-	ParentId  string       `json:"parent_id,omitempty" validate:"required"`
-	ChildId   string       `json:"child_id,omitempty" validate:"required"`
-	Relation  RelationType `json:"relation,omitempty"`
-	CanPickup bool         `json:"can_pickup,omitempty"`
+	Id       string       `json:"id,omitempty"`
+	ParentId string       `json:"parent_id,omitempty" validate:"required"`
+	ChildId  string       `json:"child_id,omitempty" validate:"required"`
+	Relation RelationType `json:"relation,omitempty"`
 }
 
 func (a CreateArgument) Validate() error {
@@ -35,7 +34,6 @@ func (a CreateArgument) Populate() (parentChild ParentChild) {
 	parentChild.ParentId = a.ParentId
 	parentChild.ChildId = a.ChildId
 	parentChild.Relation = a.Relation
-	parentChild.CanPickup = a.CanPickup
 	parentChild.CreateTime = time.Now()
 
 	return parentChild

@@ -49,7 +49,7 @@ func Create(w http.ResponseWriter, r *http.Request) {
 
 	// A parent (non-staff) may only ever create a link for THEMSELVES --
 	// without this, any authenticated parent could grant an arbitrary
-	// account (including a stranger's) can_pickup rights over any child in
+	// account (including a stranger's) guardian access over any child in
 	// the organization, which is a child-safety issue, not just a privacy
 	// one. Staff (director/co-director/teacher) retain full discretion to
 	// link any parent to any child in their org, per parentInOrganization's
@@ -81,10 +81,9 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = parentchild.Create(ctx, parentchildpg.CreateArgument{
-		ParentId:  request.ParentId,
-		ChildId:   request.ChildId,
-		Relation:  parentchildpg.MapRelationType(request.Relation),
-		CanPickup: request.CanPickup,
+		ParentId: request.ParentId,
+		ChildId:  request.ChildId,
+		Relation: parentchildpg.MapRelationType(request.Relation),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -9,19 +9,14 @@ import (
 )
 
 type UpdateArgument struct {
-	Query     databasepg.Query `json:"query,omitempty" validate:"required"`
-	Relation  *RelationType    `json:"relation,omitempty"`
-	CanPickup *bool            `json:"can_pickup,omitempty"`
+	Query    databasepg.Query `json:"query,omitempty" validate:"required"`
+	Relation *RelationType    `json:"relation,omitempty"`
 }
 
 func (a UpdateArgument) Populate(parentChild ParentChild) ParentChild {
 
 	if a.Relation != nil {
 		parentChild.Relation = *a.Relation
-	}
-
-	if a.CanPickup != nil {
-		parentChild.CanPickup = *a.CanPickup
 	}
 
 	return parentChild

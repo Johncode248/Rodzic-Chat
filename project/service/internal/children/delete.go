@@ -2,6 +2,7 @@ package children
 
 import (
 	"context"
+	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
@@ -70,13 +71,27 @@ func InitiateDeleteMutation(ctx context.Context, mutation *childrenpg.DeleteMuta
 	return nil
 }
 
+// FinalizeDeleteMutation never hard-deletes the Child row: a placówka
+// "removing" a child from its roster must not take that child away from
+// the parent, who keeps seeing it (and its chat/event/absence history)
+// afterwards -- see project/common/children/child.go's doc comment on
+// OrganizationId. Unenrolling just clears OrganizationId/GroupId on every
+// matched child; the row and every ParentChild link to it are untouched.
 func FinalizeDeleteMutation(ctx context.Context, mutation *childrenpg.DeleteMutation) (err error) {
 	ctx = logger.Enter(ctx, "children.FinalizeDeleteMutation", mutation)
 	defer logger.Exit(ctx, "children.FinalizeDeleteMutation", &err)
 
-	_, err = gormdb.Delete[childrenpg.Child](ctx, mutation.Foundation.Query)
-	if err != nil {
-		return err
+	for index := range mutation.Transient {
+		unenrolled := mutation.Transient[index].Current
+		unenrolled.OrganizationId = ""
+		unenrolled.GroupId = ""
+		unenrolled.UpdateTime = time.Now()
+
+		if err = gormdb.Update(ctx, &unenrolled, byIdQuery(unenrolled.Id)); err != nil {
+			return err
+		}
+
+		mutation.Transient[index].Future = unenrolled
 	}
 
 	for index := range mutation.Transient {
@@ -98,12 +113,9 @@ func RollbackDeleteMutation(ctx context.Context, mutation *childrenpg.DeleteMuta
 					continue
 				}
 
+				restored := transient.Previous
 				functions = append(functions, func() error {
-					return FinalizeCreateMutation(ctx, &childrenpg.CreateMutation{
-						Transient: childrenpg.Transient{
-							Future: transient.Previous,
-						},
-					})
+					return gormdb.Update(ctx, &restored, byIdQuery(restored.Id))
 				})
 			}
 			return routines.Select(functions...)

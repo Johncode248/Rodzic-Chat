@@ -13,7 +13,6 @@ type UpdateArgument struct {
 	Query                             databasepg.Query `json:"query,omitempty" validate:"required"`
 	Name                              *string          `json:"name,omitempty" validate:"omitempty,max=128"`
 	TeacherId                         *string          `json:"teacher_id,omitempty"`
-	AgeRange                          *string          `json:"age_range,omitempty"`
 	RequireChildBirthDateVerification *bool            `json:"require_child_birth_date_verification,omitempty"`
 }
 
@@ -27,10 +26,6 @@ func (a UpdateArgument) Populate(group Group) Group {
 
 	if a.TeacherId != nil {
 		group.TeacherId = *a.TeacherId
-	}
-
-	if a.AgeRange != nil {
-		group.AgeRange = *a.AgeRange
 	}
 
 	if a.RequireChildBirthDateVerification != nil {

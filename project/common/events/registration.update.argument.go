@@ -10,10 +10,9 @@ import (
 )
 
 type RegistrationUpdateArgument struct {
-	Query        databasepg.Query    `json:"query,omitempty" validate:"required"`
-	ConfirmedBy  string              `json:"confirmed_by,omitempty" validate:"required"`
-	Status       *RegistrationStatus `json:"status,omitempty"`
-	ConsentGiven *bool               `json:"consent_given,omitempty"`
+	Query       databasepg.Query    `json:"query,omitempty" validate:"required"`
+	ConfirmedBy string              `json:"confirmed_by,omitempty" validate:"required"`
+	Status      *RegistrationStatus `json:"status,omitempty"`
 }
 
 func (a RegistrationUpdateArgument) Populate(registration EventRegistration) EventRegistration {
@@ -23,10 +22,6 @@ func (a RegistrationUpdateArgument) Populate(registration EventRegistration) Eve
 
 	if a.Status != nil {
 		registration.Status = *a.Status
-	}
-
-	if a.ConsentGiven != nil {
-		registration.ConsentGiven = *a.ConsentGiven
 	}
 
 	return registration

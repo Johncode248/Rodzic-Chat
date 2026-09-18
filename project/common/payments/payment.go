@@ -1,6 +1,11 @@
 package paymentspg
 
-import "time"
+import (
+	"time"
+
+	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 // Payment is a one-time charge a director/co-director assigns to one
 // parent, for one child. "Assigning to several parents at once" (product
@@ -16,16 +21,18 @@ import "time"
 // bank-transfer payment never needs them at all (product direction: no
 // platform/Stripe fee applies outside the app).
 type Payment struct {
-	Id             string          `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string          `json:"organization_id,omitempty" gorm:"not null;index"`
-	BatchId        string          `json:"batch_id,omitempty" gorm:"index"`
-	ChildId        string          `json:"child_id,omitempty" gorm:"not null;index"`
-	ParentId       string          `json:"parent_id,omitempty" gorm:"not null;index"`
-	CreatedBy      string          `json:"created_by,omitempty" gorm:"not null"`
-	Category       PaymentCategory `json:"category,omitempty"`
-	Title          string          `json:"title,omitempty" gorm:"not null"`
-	Description    string          `json:"description,omitempty"`
-	DueDate        *time.Time      `json:"due_date,omitempty"`
+	Id             string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization   *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	BatchId        string                        `json:"batch_id,omitempty" gorm:"index"`
+	ChildId        string                        `json:"child_id,omitempty" gorm:"not null;index"`
+	Child          *childrenpg.Child             `json:"-" gorm:"foreignKey:ChildId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	ParentId       string                        `json:"parent_id,omitempty" gorm:"not null;index"`
+	CreatedBy      string                        `json:"created_by,omitempty" gorm:"not null"`
+	Category       PaymentCategory               `json:"category,omitempty"`
+	Title          string                        `json:"title,omitempty" gorm:"not null"`
+	Description    string                        `json:"description,omitempty"`
+	DueDate        *time.Time                    `json:"due_date,omitempty"`
 
 	BaseAmountGrosze        int64 `json:"base_amount_grosze,omitempty" gorm:"not null"`
 	PlatformFeeGrosze       int64 `json:"platform_fee_grosze,omitempty"`
@@ -34,7 +41,7 @@ type Payment struct {
 	ActualStripeFeeGrosze   int64 `json:"actual_stripe_fee_grosze,omitempty"`
 
 	PaymentMethod PaymentMethod `json:"payment_method,omitempty"`
-	Status        PaymentStatus `json:"status,omitempty" gorm:"not null"`
+	Status        PaymentStatus `json:"status,omitempty" gorm:"not null;index"`
 
 	StripeCheckoutSessionId string `json:"stripe_checkout_session_id,omitempty"`
 	StripePaymentIntentId   string `json:"stripe_payment_intent_id,omitempty"`

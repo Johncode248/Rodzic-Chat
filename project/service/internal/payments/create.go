@@ -9,6 +9,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	paymentspg "github.com/Johncode248/Rodzic-Chat/project/common/payments"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var ErrNoRecipients = errors.New("at least one recipient is required")
@@ -53,10 +54,19 @@ func Create(ctx context.Context, organizationId, createdBy string, request payme
 		})
 	}
 
-	for i := range rows {
-		if err = gormdb.Create(ctx, &rows[i]); err != nil {
-			return res, err
+	// One row per recipient, but they must land together or not at all --
+	// without a real transaction here, a crash or DB error partway through
+	// the loop (e.g. assigning a payment to 3 parents) left some parents
+	// charged and others silently not, with nothing to detect or undo it.
+	if err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range rows {
+			if err := tx.Create(&rows[i]).Error; err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		return res, err
 	}
 
 	res.Payments = rows

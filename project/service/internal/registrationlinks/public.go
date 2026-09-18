@@ -193,7 +193,7 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 	emailTaken, err := accounts.Select(ctx, accountspg.SelectArgument{
 		Query: databasepg.Query{
 			Limit:  1,
-			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: effectiveEmail}}}},
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "email", Operator: "=", Value: effectiveEmail}}}},
 		},
 	})
 	if err != nil {
@@ -247,7 +247,6 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 				Id:             accountId,
 				OrganizationId: link.OrganizationId,
 				Name:           argument.Name,
-				Login:          effectiveEmail,
 				Email:          effectiveEmail,
 				AccountType:    accountspg.AccountTypeParent,
 				Status:         accountspg.StatusEnabled,
@@ -323,10 +322,9 @@ func PublicRegister(ctx context.Context, argument registrationlinkspg.PublicRegi
 			}
 
 			pc := parentchildpg.CreateArgument{
-				ParentId:  accountId,
-				ChildId:   resolved.childId,
-				Relation:  parentchildpg.RelationTypeGuardian,
-				CanPickup: true,
+				ParentId: accountId,
+				ChildId:  resolved.childId,
+				Relation: parentchildpg.RelationTypeGuardian,
 			}.Populate()
 			return tx.Create(&pc).Error
 		})

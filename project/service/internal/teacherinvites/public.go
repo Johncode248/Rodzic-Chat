@@ -136,7 +136,7 @@ func PublicRegister(ctx context.Context, argument teacherinvitespg.PublicRegiste
 	emailTaken, err := accounts.Select(ctx, accountspg.SelectArgument{
 		Query: databasepg.Query{
 			Limit:  1,
-			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: argument.Email}}}},
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "email", Operator: "=", Value: argument.Email}}}},
 		},
 	})
 	if err != nil {
@@ -159,7 +159,6 @@ func PublicRegister(ctx context.Context, argument teacherinvitespg.PublicRegiste
 				Id:             accountId,
 				OrganizationId: invite.OrganizationId,
 				Name:           argument.Name,
-				Login:          argument.Email,
 				Email:          argument.Email,
 				AccountType:    accountType,
 				Status:         accountspg.StatusEnabled,

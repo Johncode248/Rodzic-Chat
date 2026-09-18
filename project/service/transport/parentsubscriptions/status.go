@@ -11,8 +11,8 @@ import (
 )
 
 // Status handles GET /private/parent-subscription -- any authenticated
-// account reads their own AI plan + current usage. Auto-creates a
-// PlanFree row on first call (see parentsubscriptions.GetOrCreate).
+// account reads their own plan. Auto-creates a PlanFree row on first call
+// (see parentsubscriptions.GetOrCreate).
 func Status(w http.ResponseWriter, r *http.Request) {
 	var (
 		res parentsubscriptionspg.StatusResponse
@@ -35,12 +35,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = parentsubscriptionspg.StatusResponse{
-		Plan:            subscription.Plan.String(),
-		AiRequestsUsed:  subscription.AiRequestsUsed,
-		AiRequestsLimit: parentsubscriptionspg.MonthlyAiRequestLimit(subscription.Plan),
-		AiTokensUsed:    subscription.AiTokensUsed,
-		AiTokensLimit:   parentsubscriptionspg.MonthlyAiTokenLimit(subscription.Plan),
-		PeriodResetAt:   subscription.PeriodResetAt.Format("2006-01-02"),
+		Plan: subscription.Plan.String(),
 	}
 
 	json.NewEncoder(w).Encode(res)

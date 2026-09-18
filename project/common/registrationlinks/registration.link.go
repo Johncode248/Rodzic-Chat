@@ -1,6 +1,11 @@
 package registrationlinkspg
 
-import "time"
+import (
+	"time"
+
+	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 // RegistrationLink is how a director lets parents in one group self-register
 // their own account, instead of the director creating parent accounts
@@ -12,17 +17,19 @@ import "time"
 // there's no separate status field, every other state (expired, exhausted)
 // is computed from ExpiresAt/UsedCount at read time, not stored.
 type RegistrationLink struct {
-	Id               string    `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId   string    `json:"organization_id,omitempty" gorm:"not null;index"`
-	GroupId          string    `json:"group_id,omitempty" gorm:"not null;index"`
-	Token            string    `json:"token,omitempty" gorm:"not null;uniqueIndex"`
-	ChildrenCount    int       `json:"children_count,omitempty" gorm:"not null"`
-	MaxRegistrations int       `json:"max_registrations,omitempty" gorm:"not null"`
-	UsedCount        int       `json:"used_count,omitempty" gorm:"not null"`
-	CreatedBy        string    `json:"created_by,omitempty" gorm:"not null"`
-	ExpiresAt        time.Time `json:"expires_at,omitempty" gorm:"not null"`
-	CreateTime       time.Time `json:"create_time,omitempty" gorm:"not null"`
-	UpdateTime       time.Time `json:"update_time,omitempty" gorm:"not null"`
+	Id               string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId   string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization     *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	GroupId          string                        `json:"group_id,omitempty" gorm:"not null;index"`
+	Group            *groupspg.Group               `json:"-" gorm:"foreignKey:GroupId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	Token            string                        `json:"token,omitempty" gorm:"not null;uniqueIndex"`
+	ChildrenCount    int                           `json:"children_count,omitempty" gorm:"not null"`
+	MaxRegistrations int                           `json:"max_registrations,omitempty" gorm:"not null"`
+	UsedCount        int                           `json:"used_count,omitempty" gorm:"not null"`
+	CreatedBy        string                        `json:"created_by,omitempty" gorm:"not null"`
+	ExpiresAt        time.Time                     `json:"expires_at,omitempty" gorm:"not null"`
+	CreateTime       time.Time                     `json:"create_time,omitempty" gorm:"not null"`
+	UpdateTime       time.Time                     `json:"update_time,omitempty" gorm:"not null"`
 }
 
 // IsUsable reports whether the link can still accept a new registration —

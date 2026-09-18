@@ -24,15 +24,10 @@ type SendRequest struct {
 	Longitude *float64 `json:"longitude,omitempty"`
 }
 
-// SendResponse: Reply is the assistant's new turn. AiRequestsUsed/Limit and AiTokensUsed/Limit
-// mirror parentsubscriptionspg.StatusResponse so the client can update its usage display without
-// a second round trip -- AiTokensUsed/Limit is the one that actually gates whether the parent
-// can send another message (see StatusResponse's doc comment); AiRequestsUsed/Limit is a
-// secondary stat only. -1 means unlimited (Max plan).
+// SendResponse: Reply is the assistant's new turn. No usage/limit fields -- this endpoint is
+// hard-disabled server-side for MVP (see project/service/transport/aichat.Send), since
+// ParentSubscription no longer tracks AI usage at all (project/common/parentsubscriptions was
+// stripped down to just Plan).
 type SendResponse struct {
-	Reply           string `json:"reply,omitempty"`
-	AiRequestsUsed  int64  `json:"ai_requests_used"`
-	AiRequestsLimit int64  `json:"ai_requests_limit"`
-	AiTokensUsed    int64  `json:"ai_tokens_used"`
-	AiTokensLimit   int64  `json:"ai_tokens_limit"`
+	Reply string `json:"reply,omitempty"`
 }

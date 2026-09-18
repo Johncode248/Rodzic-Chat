@@ -9,7 +9,7 @@ import (
 // GoogleCallbackRegisterHandler is intentionally disabled: /register now only
 // creates a director + a brand-new organization (see register.go), and
 // there's no way for a Google OAuth callback to supply organization_name/
-// type/subdomain. Parent/teacher accounts are never self-registered at all —
+// type. Parent/teacher accounts are never self-registered at all —
 // they're provisioned by a director via POST /private/accounts/invite. If
 // "sign up with Google" for directors is wanted later, this handler should
 // collect the organization fields (e.g. a form after the OAuth redirect)

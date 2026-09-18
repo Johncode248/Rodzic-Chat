@@ -1,6 +1,11 @@
 package groupteacherspg
 
-import "time"
+import (
+	"time"
+
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
+	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
+)
 
 // GroupTeacher is a group <-> teacher membership row. A Group also carries
 // its own single TeacherId field (the "primary" teacher, set at group
@@ -9,10 +14,12 @@ import "time"
 // existing code that reads Group.TeacherId. A group's full teacher set is
 // therefore the union of Group.TeacherId (if set) and these rows.
 type GroupTeacher struct {
-	Id         string    `json:"id,omitempty" gorm:"primaryKey"`
-	GroupId    string    `json:"group_id,omitempty" gorm:"not null;index"`
-	TeacherId  string    `json:"teacher_id,omitempty" gorm:"not null;index"`
-	CreateTime time.Time `json:"create_time,omitempty" gorm:"not null"`
+	Id         string              `json:"id,omitempty" gorm:"primaryKey"`
+	GroupId    string              `json:"group_id,omitempty" gorm:"not null;index"`
+	Group      *groupspg.Group     `json:"-" gorm:"foreignKey:GroupId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	TeacherId  string              `json:"teacher_id,omitempty" gorm:"not null;index"`
+	Teacher    *accountspg.Account `json:"-" gorm:"foreignKey:TeacherId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	CreateTime time.Time           `json:"create_time,omitempty" gorm:"not null"`
 }
 
 type CreateRequest struct {

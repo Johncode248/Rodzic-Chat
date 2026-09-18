@@ -95,27 +95,48 @@ func FinalizeCreateMutation(ctx context.Context, mutation *groupspg.CreateMutati
 // use to post to that group's parents. Both are scoped to this specific
 // group (GroupId), per product decision -- each group gets its own pair,
 // not one shared pair for the whole organization.
+//
+// Created sequentially, not via routines.Select's parallel fan-out: Channel
+// has no GroupId foreign key (GroupId is optional on other tables too, see
+// the FK migration's notes), so a group-creation rollback deleting the
+// Group row wouldn't cascade-clean an already-created channel on its own.
+// If the second insert fails here, the first channel is explicitly deleted
+// before returning, so the pair either both exist or neither does --
+// FinalizeChannelDeleteMutation is used directly (not the public
+// DeleteChannel) since it skips the "Parents channel is never deletable"
+// guard that only makes sense once a channel is actually in normal use.
 func createDefaultChannels(ctx context.Context, group groupspg.Group) error {
-	return routines.Select(
-		func() error {
-			_, err := chats.CreateChannel(ctx, chatspg.ChannelCreateArgument{
-				OrganizationId: group.OrganizationId,
-				GroupId:        group.Id,
-				Type:           chatspg.ChannelTypeParents,
-				Name:           fmt.Sprintf("Rodzice — %s", group.Name),
-			})
-			return err
-		},
-		func() error {
-			_, err := chats.CreateChannel(ctx, chatspg.ChannelCreateArgument{
-				OrganizationId: group.OrganizationId,
-				GroupId:        group.Id,
-				Type:           chatspg.ChannelTypeAnnouncement,
-				Name:           fmt.Sprintf("Ogłoszenia — %s", group.Name),
-			})
-			return err
-		},
-	)
+	parents, err := chats.CreateChannel(ctx, chatspg.ChannelCreateArgument{
+		OrganizationId: group.OrganizationId,
+		GroupId:        group.Id,
+		Type:           chatspg.ChannelTypeParents,
+		Name:           fmt.Sprintf("Rodzice — %s", group.Name),
+	})
+	if err != nil {
+		return err
+	}
+
+	if _, err = chats.CreateChannel(ctx, chatspg.ChannelCreateArgument{
+		OrganizationId: group.OrganizationId,
+		GroupId:        group.Id,
+		Type:           chatspg.ChannelTypeAnnouncement,
+		Name:           fmt.Sprintf("Ogłoszenia — %s", group.Name),
+	}); err != nil {
+		if cleanupErr := chats.FinalizeChannelDeleteMutation(ctx, &chatspg.ChannelDeleteMutation{
+			Foundation: chatspg.ChannelDeleteArgument{
+				Query: databasepg.Query{
+					Groups: []databasepg.Group{
+						{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: parents.Channel.Id}}},
+					},
+				},
+			},
+		}); cleanupErr != nil {
+			panic(cleanupErr)
+		}
+		return err
+	}
+
+	return nil
 }
 
 func RollbackCreateMutation(ctx context.Context, mutation *groupspg.CreateMutation) (err error) {

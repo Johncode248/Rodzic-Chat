@@ -65,9 +65,9 @@ type anthropicUsage struct {
 	OutputTokens int64 `json:"output_tokens"`
 }
 
-// TotalTokens is what this app actually bills its own AiTokensUsed cap against -- Anthropic
-// meters input and output tokens separately (and at different prices), but this app's cap is
-// deliberately simple, not a cost-accurate one.
+// TotalTokens sums input and output tokens for one round -- Anthropic meters them separately
+// (and at different prices); this endpoint is currently hard-disabled server-side for MVP (see
+// project/service/transport/aichat.Send), so nothing enforces a cap against this any more.
 func (u anthropicUsage) TotalTokens() int64 {
 	return u.InputTokens + u.OutputTokens
 }

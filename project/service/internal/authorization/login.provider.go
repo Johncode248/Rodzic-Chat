@@ -29,7 +29,7 @@ func LoginWithVerifiedEmail(ctx context.Context, argument authorizationpg.LoginP
 	accountList, err := gormdb.Select[accountspg.Account](ctx, databasepg.Query{
 		Limit: 1,
 		Groups: []databasepg.Group{
-			{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: argument.Email}}},
+			{Filters: []databasepg.Filter{{Key: "email", Operator: "=", Value: argument.Email}}},
 		},
 	})
 	if err != nil {
@@ -41,7 +41,7 @@ func LoginWithVerifiedEmail(ctx context.Context, argument authorizationpg.LoginP
 
 	issued, err := credentials.IssueTokens(ctx, credentials.IssueTokensArgument{
 		AccountId:  accountList[0].Id,
-		Email:      accountList[0].Login,
+		Email:      accountList[0].Email,
 		DeviceId:   argument.DeviceId,
 		DeviceName: argument.DeviceName,
 		UserAgent:  argument.UserAgent,

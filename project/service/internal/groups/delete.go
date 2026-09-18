@@ -7,6 +7,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
 )
 
 func Delete(ctx context.Context, argument groupspg.DeleteArgument) (res groupspg.DeleteResponse, err error) {
@@ -73,6 +74,15 @@ func InitiateDeleteMutation(ctx context.Context, mutation *groupspg.DeleteMutati
 func FinalizeDeleteMutation(ctx context.Context, mutation *groupspg.DeleteMutation) (err error) {
 	ctx = logger.Enter(ctx, "groups.FinalizeDeleteMutation", mutation)
 	defer logger.Exit(ctx, "groups.FinalizeDeleteMutation", &err)
+
+	// A deleted group must not take its children's placówka membership
+	// away -- only unassign them from this (now-deleted) group, leaving
+	// OrganizationId (and every ParentChild link) untouched.
+	for _, transient := range mutation.Transient {
+		if err = children.UnenrollForGroup(ctx, transient.Current.Id); err != nil {
+			return err
+		}
+	}
 
 	_, err = gormdb.Delete[groupspg.Group](ctx, mutation.Foundation.Query)
 	if err != nil {

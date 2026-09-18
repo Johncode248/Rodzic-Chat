@@ -6,32 +6,19 @@ import (
 	"time"
 
 	aichatpg "github.com/Johncode248/Rodzic-Chat/project/common/aichat"
-	parentsubscriptionspg "github.com/Johncode248/Rodzic-Chat/project/common/parentsubscriptions"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/nfz"
-	"github.com/Johncode248/Rodzic-Chat/project/service/internal/parentsubscriptions"
 )
 
 const baseSystemPrompt = "Jesteś pomocnym asystentem AI w aplikacji Rodzic Chat, wspierającym rodziców w opiece nad dziećmi: przypomnienia, rekomendacje (lekarze, zajęcia, place zabaw), proste planowanie. Odpowiadaj po polsku, zwięźle i konkretnie. Nie udzielaj porad medycznych ani prawnych -- w takich sprawach zawsze odsyłaj do specjalisty.\n\n" +
 	"Gdy rodzic szuka lekarza/specjalisty dla dziecka, użyj narzędzia find_nfz_benefit, a potem search_nfz_queues (oficjalne dane NFZ o kolejkach) -- dobierz najlepszą placówkę biorąc pod uwagę prognozowany czas oczekiwania, odległość/miejscowość i czy przyjmuje dzieci w odpowiednim wieku. Do zwykłych miejsc (przedszkola, place zabaw, zwykły pediatra/POZ) użyj search_places. Prezentuj wyniki czytelnie: nazwa placówki, adres/miejscowość, telefon, prognozowany czas oczekiwania -- w krótkiej liście, nie jako surowe dane."
 
-// Send is the parent AI assistant's whole request pipeline: check the
-// caller's plan has room this period, ask Claude, and (only on a
-// successful reply -- a failed call never counts against the parent's
-// quota) record the usage. See project/common/parentsubscriptions for the
-// plan/limit model and project/service/internal/aichat/client.go for the
-// actual Anthropic call.
+// Send is the parent AI assistant's whole request pipeline: ask Claude and return the reply. See
+// project/service/internal/aichat/client.go for the actual Anthropic call. This endpoint is
+// hard-disabled server-side for MVP (see project/service/transport/aichat.Send) -- there is
+// deliberately no usage/quota check here any more, since ParentSubscription no longer tracks AI
+// usage at all.
 func Send(ctx context.Context, accountId string, argument aichatpg.SendRequest) (res aichatpg.SendResponse, err error) {
-	subscription, err := parentsubscriptions.GetOrCreate(ctx, accountId)
-	if err != nil {
-		return res, err
-	}
-
-	tokenLimit := parentsubscriptionspg.MonthlyAiTokenLimit(subscription.Plan)
-	if tokenLimit >= 0 && subscription.AiTokensUsed >= tokenLimit {
-		return res, parentsubscriptions.ErrAiLimitReached
-	}
-
 	systemPrompt := baseSystemPrompt
 	if argument.ChildId != "" {
 		if childContext, ok := childContextFor(ctx, accountId, argument.ChildId); ok {
@@ -46,32 +33,12 @@ func Send(ctx context.Context, accountId string, argument aichatpg.SendRequest) 
 		)
 	}
 
-	reply, tokensUsed, err := converseWithTools(ctx, systemPrompt, argument.Messages)
+	reply, _, err := converseWithTools(ctx, systemPrompt, argument.Messages)
 	if err != nil {
 		return res, err
 	}
 
-	updated, err := parentsubscriptions.IncrementUsageWithTokens(ctx, accountId, tokensUsed)
-	if err != nil {
-		// The reply was already generated -- still return it to the parent
-		// even if the usage bookkeeping itself failed, rather than
-		// discarding a real (costly) Anthropic response over a DB hiccup.
-		return aichatpg.SendResponse{
-			Reply:           reply,
-			AiRequestsUsed:  subscription.AiRequestsUsed + 1,
-			AiRequestsLimit: parentsubscriptionspg.MonthlyAiRequestLimit(subscription.Plan),
-			AiTokensUsed:    subscription.AiTokensUsed + tokensUsed,
-			AiTokensLimit:   tokenLimit,
-		}, nil
-	}
-
-	return aichatpg.SendResponse{
-		Reply:           reply,
-		AiTokensUsed:    updated.AiTokensUsed,
-		AiTokensLimit:   parentsubscriptionspg.MonthlyAiTokenLimit(updated.Plan),
-		AiRequestsUsed:  updated.AiRequestsUsed,
-		AiRequestsLimit: parentsubscriptionspg.MonthlyAiRequestLimit(updated.Plan),
-	}, nil
+	return aichatpg.SendResponse{Reply: reply}, nil
 }
 
 // childContextFor returns a short "Name, N lat" description for childId if

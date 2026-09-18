@@ -1,6 +1,10 @@
 package teacherinvitespg
 
-import "time"
+import (
+	"time"
+
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 // TeacherInvite is how a director invites a teacher (or, per AccountType,
 // a co-director): a single-use, expiring, revocable link — mirroring
@@ -10,10 +14,11 @@ import "time"
 // invite a teacher before deciding which group they'll lead (meaningless
 // for a co-director invite, which is never group-scoped).
 type TeacherInvite struct {
-	Id             string `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string `json:"organization_id,omitempty" gorm:"not null;index"`
-	GroupId        string `json:"group_id,omitempty" gorm:"index"`
-	Token          string `json:"token,omitempty" gorm:"not null;uniqueIndex"`
+	Id             string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization   *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	GroupId        string                        `json:"group_id,omitempty" gorm:"index"`
+	Token          string                        `json:"token,omitempty" gorm:"not null;uniqueIndex"`
 	// AccountType is "teacher" (default/empty) or "co_director" -- see
 	// authorizationpg.MapAccountType for the accepted values. Only a
 	// Director (not a CoDirector) may create a co_director invite, enforced

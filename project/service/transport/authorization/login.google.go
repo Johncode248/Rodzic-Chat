@@ -16,7 +16,7 @@ import (
 var googleOAuthConfig = &oauth2.Config{
 	ClientID:     variables.GoogleOAuthClientId,
 	ClientSecret: variables.GoogleOAuthClientSecret,
-	RedirectURL:  fmt.Sprintf("%s%s", variables.DOMEIN_B, "/login/callback"),
+	RedirectURL:  fmt.Sprintf("%s%s", variables.BackendURL, "/login/callback"),
 	Scopes: []string{
 		"openid",
 		"email",

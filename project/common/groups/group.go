@@ -2,14 +2,16 @@ package groupspg
 
 import (
 	"time"
+
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
 )
 
 type Group struct {
-	Id             string `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string `json:"organization_id,omitempty" gorm:"not null;index"`
-	Name           string `json:"name,omitempty" gorm:"not null"`
-	TeacherId      string `json:"teacher_id,omitempty"`
-	AgeRange       string `json:"age_range,omitempty"`
+	Id             string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization   *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	Name           string                        `json:"name,omitempty" gorm:"not null"`
+	TeacherId      string                        `json:"teacher_id,omitempty"`
 	// RequireChildBirthDateVerification: when true, a parent registering
 	// through this group's registration link must provide the child's
 	// birth date (whether creating a new child or matching an existing

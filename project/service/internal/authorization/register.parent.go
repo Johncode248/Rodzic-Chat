@@ -32,7 +32,7 @@ func RegisterParent(ctx context.Context, argument authorizationpg.RegisterParent
 	existing, err := accounts.Select(ctx, accountspg.SelectArgument{
 		Query: databasepg.Query{
 			Limit:  1,
-			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "login", Operator: "=", Value: effectiveEmail}}}},
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "email", Operator: "=", Value: effectiveEmail}}}},
 		},
 	})
 	if err != nil {
@@ -57,7 +57,6 @@ func RegisterParent(ctx context.Context, argument authorizationpg.RegisterParent
 	if _, err = accounts.Create(ctx, accountspg.CreateArgument{
 		Id:          accountId,
 		Name:        name,
-		Login:       effectiveEmail,
 		Email:       effectiveEmail,
 		AccountType: accountspg.AccountTypeParent,
 		Status:      accountspg.StatusEnabled,

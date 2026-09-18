@@ -17,7 +17,6 @@ type EventCreateArgument struct {
 	Type                 EventType  `json:"type,omitempty" validate:"required"`
 	Title                string     `json:"title,omitempty" validate:"required,max=128"`
 	Description          string     `json:"description,omitempty"`
-	RequiresConsent      bool       `json:"requires_consent,omitempty"`
 	RequiresItem         string     `json:"requires_item,omitempty"`
 	EventDate            time.Time  `json:"event_date,omitempty" validate:"required"`
 	RegistrationDeadline *time.Time `json:"registration_deadline,omitempty"`
@@ -43,7 +42,6 @@ func (a EventCreateArgument) Populate() (event Event) {
 	event.Type = a.Type
 	event.Title = a.Title
 	event.Description = a.Description
-	event.RequiresConsent = a.RequiresConsent
 	event.RequiresItem = a.RequiresItem
 	event.EventDate = a.EventDate
 	event.RegistrationDeadline = a.RegistrationDeadline

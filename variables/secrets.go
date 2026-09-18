@@ -146,4 +146,10 @@ var R2Endpoint = mustEnv("R2_ENDPOINT")
 // recompiling the binary. envOr, not mustEnv: the fallback keeps today's
 // local dev experience working unchanged for anyone who doesn't set
 // DATABASE_URL.
-var DatabaseURL = envOr("DATABASE_URL", "host=localhost port=5432 user=staszek password= dbname=staszek sslmode=disable connect_timeout=15")
+var DatabaseURL = mustEnv("DATABASE_URL")
+
+// "host=localhost port=5432 user=staszek password= dbname=staszek sslmode=disable connect_timeout=15"
+
+var BackendURL = envOr("BACKEND_URL", "http://localhost:8080")
+
+var FrontendURL = envOr("FRONTEND_URL", "https://platforma.rodzicchat.pl")

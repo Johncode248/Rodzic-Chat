@@ -20,10 +20,9 @@ type RegisterArgument struct {
 	// (teacherinvites, registrationlinks, parent-invites) -- this one was
 	// the only one missing it, letting a director register with e.g. a
 	// single-character password.
-	Password              string `json:"password,omitempty" validate:"required,min=6,max=72"`
-	OrganizationName      string `json:"organization_name,omitempty" validate:"required,max=128"`
-	OrganizationType      string `json:"organization_type,omitempty" validate:"required"`
-	OrganizationSubdomain string `json:"organization_subdomain,omitempty" validate:"required,max=63,alphanum"`
+	Password         string `json:"password,omitempty" validate:"required,min=6,max=72"`
+	OrganizationName string `json:"organization_name,omitempty" validate:"required,max=128"`
+	OrganizationType string `json:"organization_type,omitempty" validate:"required"`
 	// OrganizationChildrenLimit picks the placowka's capacity/pricing tier
 	// -- must be one of organizationspg.ChildrenLimitOptions(). Keep the
 	// "oneof" list below in sync with that slice.

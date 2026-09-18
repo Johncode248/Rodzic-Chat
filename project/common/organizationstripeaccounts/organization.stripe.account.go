@@ -1,6 +1,10 @@
 package organizationstripeaccountspg
 
-import "time"
+import (
+	"time"
+
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 // OrganizationStripeAccount links an Organization to its Stripe Connect
 // Express account (see project/service/internal/organizationstripeaccounts
@@ -14,14 +18,15 @@ import "time"
 // uzupełnienia danych" vs "połączono" without calling Stripe on every page
 // load.
 type OrganizationStripeAccount struct {
-	Id               string    `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId   string    `json:"organization_id,omitempty" gorm:"unique;not null;index"`
-	StripeAccountId  string    `json:"stripe_account_id,omitempty" gorm:"not null"`
-	ChargesEnabled   bool      `json:"charges_enabled,omitempty"`
-	PayoutsEnabled   bool      `json:"payouts_enabled,omitempty"`
-	DetailsSubmitted bool      `json:"details_submitted,omitempty"`
-	CreateTime       time.Time `json:"create_time,omitempty" gorm:"not null"`
-	UpdateTime       time.Time `json:"update_time,omitempty" gorm:"not null"`
+	Id               string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId   string                        `json:"organization_id,omitempty" gorm:"unique;not null;index"`
+	Organization     *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	StripeAccountId  string                        `json:"stripe_account_id,omitempty" gorm:"unique;not null"`
+	ChargesEnabled   bool                          `json:"charges_enabled,omitempty"`
+	PayoutsEnabled   bool                          `json:"payouts_enabled,omitempty"`
+	DetailsSubmitted bool                          `json:"details_submitted,omitempty"`
+	CreateTime       time.Time                     `json:"create_time,omitempty" gorm:"not null"`
+	UpdateTime       time.Time                     `json:"update_time,omitempty" gorm:"not null"`
 }
 
 type SelectResponse struct {

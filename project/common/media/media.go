@@ -1,14 +1,19 @@
 package mediapg
 
-import "time"
+import (
+	"time"
+
+	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+)
 
 type Media struct {
-	Id             string `json:"id,omitempty" gorm:"primaryKey"`
-	OrganizationId string `json:"organization_id,omitempty" gorm:"not null;index"`
-	EventId        string `json:"event_id,omitempty" gorm:"index"`
-	GroupId        string `json:"group_id,omitempty" gorm:"index"`
-	UploaderId     string `json:"uploader_id,omitempty" gorm:"not null"`
-	ObjectKey      string `json:"object_key,omitempty" gorm:"not null"`
+	Id             string                        `json:"id,omitempty" gorm:"primaryKey"`
+	OrganizationId string                        `json:"organization_id,omitempty" gorm:"not null;index"`
+	Organization   *organizationspg.Organization `json:"-" gorm:"foreignKey:OrganizationId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	EventId        string                        `json:"event_id,omitempty" gorm:"index"`
+	GroupId        string                        `json:"group_id,omitempty" gorm:"index"`
+	UploaderId     string                        `json:"uploader_id,omitempty" gorm:"not null;index"`
+	ObjectKey      string                        `json:"object_key,omitempty" gorm:"not null"`
 	// OriginalFilename/ContentType are what the uploader's browser sent
 	// (e.g. "zgoda-wycieczka-zoo.pdf", "application/pdf") -- ObjectKey
 	// itself is just a UUID path, not something fit to show a downloader.

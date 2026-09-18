@@ -64,10 +64,9 @@ func Resolve(ctx context.Context, organizationId, claimId, resolvedBy string, ap
 	}
 
 	_, err = parentchild.Create(ctx, parentchildpg.CreateArgument{
-		ParentId:  claim.ClaimantId,
-		ChildId:   claim.ChildId,
-		Relation:  parentchildpg.RelationTypeGuardian,
-		CanPickup: true,
+		ParentId: claim.ClaimantId,
+		ChildId:  claim.ChildId,
+		Relation: parentchildpg.RelationTypeGuardian,
 	})
 	return err
 }

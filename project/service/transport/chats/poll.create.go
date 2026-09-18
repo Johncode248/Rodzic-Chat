@@ -13,6 +13,11 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
+// pollNotificationBody overrides the generic "sender: content" push body
+// message.create.go's notifyNewMessage would otherwise build -- a poll's
+// Message.Content is empty, so that path would send a blank-looking push.
+const pollNotificationBody = "utworzył(a) ankietę"
+
 // CreatePoll creates a message+poll+options together. Same channel lookup /
 // FeatureAnnouncements sub-check as CreateMessage, since a poll is a
 // message.
@@ -96,4 +101,6 @@ func CreatePoll(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(res)
+
+	go notifyNewMessage(channelResult.Channels[0], accountId, res.Message, pollNotificationBody)
 }

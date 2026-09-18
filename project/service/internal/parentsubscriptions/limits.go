@@ -2,7 +2,6 @@ package parentsubscriptions
 
 import (
 	"context"
-	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
@@ -17,10 +16,12 @@ func byAccountIdRecommendations(accountId string) databasepg.Query {
 	}}
 }
 
-// Limits gathers accountId's "Limity" screen data in one call -- AI tokens, recommendations
-// made, and today's Google Places searches, each against its own cap. Rolls the monthly/daily
-// counters forward first (via GetOrCreate) so the numbers are always current, never stale from
-// a previous period.
+// Limits gathers accountId's "Limity" screen data in one call. AI usage and today's Google
+// Places searches always report 0 used now -- ParentSubscription no longer tracks either (the AI
+// assistant endpoint is hard-disabled server-side, and Google Places is only gated by the shared
+// global monthly budget now, not a per-parent daily one -- see their doc comments in
+// project/common/parentsubscriptions). RecommendationsUsed is unaffected: it's counted directly
+// from project/common/places.Recommendation, never stored on ParentSubscription at all.
 func Limits(ctx context.Context, accountId string) (res parentsubscriptionspg.LimitsResponse, err error) {
 	ctx = logger.Enter(ctx, "parentsubscriptions.Limits", accountId)
 	defer logger.Exit(ctx, "parentsubscriptions.Limits", &res, &err)
@@ -35,21 +36,13 @@ func Limits(ctx context.Context, accountId string) (res parentsubscriptionspg.Li
 		return res, err
 	}
 
-	googlePlacesToday := subscription.GooglePlacesUsedToday
-	if !isSameDay(subscription.GooglePlacesUsageDate, time.Now()) {
-		// The stored counter is from a previous day -- report 0 rather than a stale number; the
-		// next actual search rolls it forward for real (see TryConsumeDailyGoogleSearch).
-		googlePlacesToday = 0
-	}
-
 	return parentsubscriptionspg.LimitsResponse{
 		Plan:                      subscription.Plan.String(),
-		AiTokensUsed:              subscription.AiTokensUsed,
+		AiTokensUsed:              0,
 		AiTokensLimit:             parentsubscriptionspg.MonthlyAiTokenLimit(subscription.Plan),
-		PeriodResetAt:             subscription.PeriodResetAt.Format("2006-01-02"),
 		RecommendationsUsed:       int64(len(recommendations)),
 		RecommendationsLimit:      parentsubscriptionspg.MaxRecommendationsPerParent,
-		GooglePlacesSearchesToday: googlePlacesToday,
+		GooglePlacesSearchesToday: 0,
 		GooglePlacesDailyLimit:    parentsubscriptionspg.DailyGooglePlacesSearchLimit,
 	}, nil
 }

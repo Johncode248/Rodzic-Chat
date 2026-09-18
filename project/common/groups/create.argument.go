@@ -15,7 +15,6 @@ type CreateArgument struct {
 	OrganizationId                    string `json:"organization_id,omitempty" validate:"required"`
 	Name                              string `json:"name,omitempty" validate:"required,max=128"`
 	TeacherId                         string `json:"teacher_id,omitempty"`
-	AgeRange                          string `json:"age_range,omitempty"`
 	RequireChildBirthDateVerification bool   `json:"require_child_birth_date_verification,omitempty"`
 }
 
@@ -36,7 +35,6 @@ func (a CreateArgument) Populate() (group Group) {
 	group.OrganizationId = a.OrganizationId
 	group.Name = a.Name
 	group.TeacherId = a.TeacherId
-	group.AgeRange = a.AgeRange
 	group.RequireChildBirthDateVerification = a.RequireChildBirthDateVerification
 	group.CreateTime = time.Now()
 

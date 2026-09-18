@@ -7,6 +7,7 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/children"
 )
 
 func Delete(ctx context.Context, argument organizationspg.DeleteArgument) (res organizationspg.DeleteResponse, err error) {
@@ -73,6 +74,16 @@ func InitiateDeleteMutation(ctx context.Context, mutation *organizationspg.Delet
 func FinalizeDeleteMutation(ctx context.Context, mutation *organizationspg.DeleteMutation) (err error) {
 	ctx = logger.Enter(ctx, "organizations.FinalizeDeleteMutation", mutation)
 	defer logger.Exit(ctx, "organizations.FinalizeDeleteMutation", &err)
+
+	// A deleted placówka must not take its parents' children away with it
+	// -- unenroll every child first (clears OrganizationId/GroupId,
+	// leaves the Child row and its ParentChild links alone) so the parent
+	// keeps seeing them afterwards.
+	for _, transient := range mutation.Transient {
+		if err = children.UnenrollForOrganization(ctx, transient.Current.Id); err != nil {
+			return err
+		}
+	}
 
 	_, err = gormdb.Delete[organizationspg.Organization](ctx, mutation.Foundation.Query)
 	if err != nil {

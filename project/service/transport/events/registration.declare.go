@@ -81,15 +81,14 @@ func DeclareRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = events.Declare(ctx, eventspg.RegistrationCreateArgument{
-		EventId:      request.EventId,
-		ChildId:      request.ChildId,
-		ConfirmedBy:  accountId,
-		Status:       request.Status,
-		ConsentGiven: request.ConsentGiven,
+		EventId:     request.EventId,
+		ChildId:     request.ChildId,
+		ConfirmedBy: accountId,
+		Status:      request.Status,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
-		if err == events.ErrRegistrationDeadlinePassed || err == events.ErrConsentRequired {
+		if err == events.ErrRegistrationDeadlinePassed {
 			status = http.StatusForbidden
 		}
 		http.Error(w, err.Error(), status)

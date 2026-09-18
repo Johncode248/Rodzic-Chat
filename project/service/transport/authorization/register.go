@@ -31,7 +31,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		Password:                  request.Password,
 		OrganizationName:          request.OrganizationName,
 		OrganizationType:          request.OrganizationType,
-		OrganizationSubdomain:     request.OrganizationSubdomain,
 		OrganizationChildrenLimit: request.OrganizationChildrenLimit,
 	})
 	if err != nil {

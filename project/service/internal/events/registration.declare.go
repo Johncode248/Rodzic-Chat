@@ -13,7 +13,6 @@ import (
 )
 
 var ErrRegistrationDeadlinePassed = errors.New("registration deadline for this event has passed")
-var ErrConsentRequired = errors.New("this event requires parental consent before a registration can be confirmed")
 
 // Declare records a parent's "będzie / nie będzie" decision for a child on
 // an event. It is an upsert keyed on (event_id, child_id): a repeated
@@ -48,14 +47,6 @@ func Declare(ctx context.Context, argument eventspg.RegistrationCreateArgument) 
 		return res, ErrRegistrationDeadlinePassed
 	}
 
-	// Event.RequiresConsent is stored (see project/common/events/event.go)
-	// but was never actually checked here -- a parent (or staff) could
-	// confirm a child for e.g. a trip that requires signed consent just by
-	// posting Status=Confirmed with ConsentGiven left false/omitted.
-	if event.RequiresConsent && argument.Status == eventspg.RegistrationStatusConfirmed && !argument.ConsentGiven {
-		return res, ErrConsentRequired
-	}
-
 	// The select-then-create-or-update sequence below has to happen inside
 	// one DB transaction serialized per (event, child), otherwise two
 	// concurrent declarations for the same child/event (a double-tapped
@@ -83,7 +74,6 @@ func Declare(ctx context.Context, argument eventspg.RegistrationCreateArgument) 
 		default:
 			existing.ConfirmedBy = argument.ConfirmedBy
 			existing.Status = argument.Status
-			existing.ConsentGiven = argument.ConsentGiven
 			existing.UpdateTime = time.Now()
 			registration = existing
 			return tx.Save(&registration).Error

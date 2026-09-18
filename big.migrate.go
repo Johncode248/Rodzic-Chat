@@ -13,6 +13,7 @@ import (
 	childeventspg "github.com/Johncode248/Rodzic-Chat/project/common/childevents"
 	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
 	credentialspg "github.com/Johncode248/Rodzic-Chat/project/common/credentials"
+	devicetokenspg "github.com/Johncode248/Rodzic-Chat/project/common/devicetokens"
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
 	featurespg "github.com/Johncode248/Rodzic-Chat/project/common/features"
 	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
@@ -53,6 +54,10 @@ func BigMigrate() {
 	}
 
 	if err := gormdb.Migrate(context.Background(), accountspg.Account{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), devicetokenspg.DeviceToken{}); err != nil {
 		panic(err)
 	}
 
@@ -204,4 +209,48 @@ func BigMigrate() {
 		panic(err)
 	}
 
+	//dropObsoleteColumns(ctx)
+}
+
+// dropObsoleteColumns removes columns whose Go struct fields were deleted outright (not just
+// renamed) -- AutoMigrate only ever ADDs columns/indexes, it never drops one on its own, so a
+// field removed from a struct would otherwise leave its column sitting in the DB forever. Each
+// statement is IF EXISTS, so this is safe to run on every boot (a fresh DB or one that already
+// had the column dropped both no-op cleanly) and safe to run alongside AutoMigrate under the
+// same migration lock above.
+func dropObsoleteColumns(ctx context.Context) {
+	statements := []string{
+		// Account.Login: replaced by Email as the sole login key (2026-09-17).
+		`ALTER TABLE accounts DROP COLUMN IF EXISTS login`,
+		// EventRegistration.ConsentGiven / Event.RequiresConsent: consent-gated event
+		// registration isn't supported in MVP (2026-09-17).
+		`ALTER TABLE event_registrations DROP COLUMN IF EXISTS consent_given`,
+		`ALTER TABLE events DROP COLUMN IF EXISTS requires_consent`,
+		// Group.AgeRange: unused, descriptive-only field (2026-09-17).
+		`ALTER TABLE groups DROP COLUMN IF EXISTS age_range`,
+		// ParentChild.CanPickup: written but never enforced anywhere (2026-09-17).
+		`ALTER TABLE parent_children DROP COLUMN IF EXISTS can_pickup`,
+		// ParentSubscription: stripped down to just Plan for MVP -- usage/quota tracking wasn't
+		// enforcing anything real (AI assistant is hard-disabled server-side; Google Places
+		// per-parent daily cap removed in favor of the shared global monthly budget alone)
+		// (2026-09-17).
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS ai_requests_used`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS ai_tokens_used`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS period_reset_at`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS google_places_used_today`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS google_places_usage_date`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS stripe_customer_id`,
+		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS stripe_subscription_id`,
+		// Organization.Subdomain/LogoUrl/PrimaryColor: unused branding fields the backend never
+		// consumed itself (2026-09-17).
+		`ALTER TABLE organizations DROP COLUMN IF EXISTS subdomain`,
+		`ALTER TABLE organizations DROP COLUMN IF EXISTS logo_url`,
+		`ALTER TABLE organizations DROP COLUMN IF EXISTS primary_color`,
+	}
+
+	for _, statement := range statements {
+		if err := gormdb.GormDB.WithContext(ctx).Exec(statement).Error; err != nil {
+			panic(err)
+		}
+	}
 }

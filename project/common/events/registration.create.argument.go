@@ -11,12 +11,11 @@ import (
 )
 
 type RegistrationCreateArgument struct {
-	Id           string             `json:"id,omitempty"`
-	EventId      string             `json:"event_id,omitempty" validate:"required"`
-	ChildId      string             `json:"child_id,omitempty" validate:"required"`
-	ConfirmedBy  string             `json:"confirmed_by,omitempty" validate:"required"`
-	Status       RegistrationStatus `json:"status,omitempty" validate:"required"`
-	ConsentGiven bool               `json:"consent_given,omitempty"`
+	Id          string             `json:"id,omitempty"`
+	EventId     string             `json:"event_id,omitempty" validate:"required"`
+	ChildId     string             `json:"child_id,omitempty" validate:"required"`
+	ConfirmedBy string             `json:"confirmed_by,omitempty" validate:"required"`
+	Status      RegistrationStatus `json:"status,omitempty" validate:"required"`
 }
 
 func (a RegistrationCreateArgument) Validate() error {
@@ -37,7 +36,6 @@ func (a RegistrationCreateArgument) Populate() (registration EventRegistration) 
 	registration.ChildId = a.ChildId
 	registration.ConfirmedBy = a.ConfirmedBy
 	registration.Status = a.Status
-	registration.ConsentGiven = a.ConsentGiven
 	registration.CreateTime = time.Now()
 	registration.UpdateTime = time.Now()
 

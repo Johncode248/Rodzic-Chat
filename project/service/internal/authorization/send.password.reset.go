@@ -65,7 +65,7 @@ func SendPasswordResetEmail(ctx context.Context, toEmail string) (err error) {
 		return err
 	}
 
-	resetLink := fmt.Sprintf("%s/password-reset?token=%s", variables.DOMEIN_F, rawToken)
+	resetLink := fmt.Sprintf("%s/password-reset?token=%s", variables.FrontendURL, rawToken)
 
 	subject := "Resetowanie hasła 🔒"
 	body := fmt.Sprintf(`<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
