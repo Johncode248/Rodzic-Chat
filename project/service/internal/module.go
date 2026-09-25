@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/api_bucket"
+	"github.com/Johncode248/Rodzic-Chat/project/service/internal/reminders"
 )
 
 func Init() {
@@ -16,6 +18,37 @@ func Init() {
 func background(ctx context.Context) {
 	fmt.Println("background start")
 
+	go runReminderScheduler(ctx)
+}
+
+// runReminderScheduler is this backend's first scheduled/background job (see this file's git
+// history -- background() used to do nothing else). It runs reminders.SendDueReminders once per
+// calendar day, gated on an in-memory "already ran today" date rather than a persisted
+// last-run timestamp -- a missed/duplicate run around a server restart is harmless here (see
+// SendDueReminders' own doc comment for why it can never double-send within a single day
+// anyway), so it wasn't worth a DB table just to survive restarts more precisely. Checking hourly
+// rather than sleeping until a fixed clock time keeps this immune to the process's own start
+// time landing before or after that hour.
+func runReminderScheduler(ctx context.Context) {
+	const reminderHourLocal = 8 // don't push before 8am local time
+	lastRunDate := ""
+
+	runIfDue := func() {
+		now := time.Now()
+		today := now.Format("2006-01-02")
+		if today == lastRunDate || now.Hour() < reminderHourLocal {
+			return
+		}
+		reminders.SendDueReminders(ctx, now)
+		lastRunDate = today
+	}
+
+	runIfDue()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		runIfDue()
+	}
 }
 
 func upload() {

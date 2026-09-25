@@ -26,6 +26,8 @@ type MessageCreateArgument struct {
 	// discourages someone pasting a wall of text into what's meant to be a quick exchange.
 	Content       string `json:"content,omitempty" validate:"max=1000"`
 	AttachmentUrl string `json:"attachment_url,omitempty"`
+	Urgent        bool   `json:"urgent,omitempty"`
+	ReplyToId     string `json:"reply_to_id,omitempty"`
 }
 
 func (a MessageCreateArgument) Validate() error {
@@ -45,6 +47,8 @@ func (a MessageCreateArgument) Populate() (message Message) {
 	message.Type = a.Type
 	message.Content = a.Content
 	message.AttachmentUrl = a.AttachmentUrl
+	message.Urgent = a.Urgent
+	message.ReplyToId = a.ReplyToId
 	message.CreateTime = time.Now()
 	return message
 }
@@ -53,6 +57,8 @@ type MessageCreateRequest struct {
 	ChannelId     string `json:"channel_id,omitempty"`
 	Content       string `json:"content,omitempty"`
 	AttachmentUrl string `json:"attachment_url,omitempty"`
+	Urgent        bool   `json:"urgent,omitempty"`
+	ReplyToId     string `json:"reply_to_id,omitempty"`
 }
 
 type MessageCreateResponse struct {

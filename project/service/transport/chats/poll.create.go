@@ -87,6 +87,8 @@ func CreatePoll(w http.ResponseWriter, r *http.Request) {
 		Options:        request.Options,
 		AllowMultiple:  request.AllowMultiple,
 		ClosesAt:       request.ClosesAt,
+		Anonymous:      request.Anonymous,
+		Kind:           request.Kind,
 		OrganizationId: organizationId,
 		SenderId:       accountId,
 	}, accountType)

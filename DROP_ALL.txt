@@ -1,0 +1,71 @@
+-- ==============================================================================
+-- PEŁNE WYCZYSZCZENIE BAZY (Postgres) -- USUWA WSZYSTKIE TABELE I DANE. NIEODWRACALNE.
+-- Każda komenda ma IF EXISTS ... CASCADE, więc plik można uruchamiać wielokrotnie, także
+-- na pustej lub częściowo wyczyszczonej bazie. CASCADE usuwa razem z tabelą jej indeksy,
+-- ograniczenia (PRIMARY KEY / UNIQUE / FOREIGN KEY) i zależne obiekty, więc kolejność
+-- tabel nie ma znaczenia. Wygenerowane 2026-09-25 z bazy 'staszek'.
+--
+-- Uruchomienie:   psql -d <baza> -f DROP_ALL.txt
+-- Potem:          uruchom backend -- GORM AutoMigrate (big.migrate.go) odtworzy tabele,
+--                 kolumny i indeksy od zera (baza będzie pusta: trzeba zarejestrować konta).
+--
+-- Lżejsza wersja bez kasowania danych (tylko indeksy i przestarzałe kolumny): DROP_INDEXES.txt
+-- ==============================================================================
+
+BEGIN;
+
+-- 1. TABELE (wraz z ich indeksami i ograniczeniami)
+DROP TABLE IF EXISTS public."absences" CASCADE;
+DROP TABLE IF EXISTS public."account_organizations" CASCADE;
+DROP TABLE IF EXISTS public."accounts" CASCADE;
+DROP TABLE IF EXISTS public."caregiver_recommendations" CASCADE;
+DROP TABLE IF EXISTS public."caregivers" CASCADE;
+DROP TABLE IF EXISTS public."channel_members" CASCADE;
+DROP TABLE IF EXISTS public."channels" CASCADE;
+DROP TABLE IF EXISTS public."chat_invites" CASCADE;
+DROP TABLE IF EXISTS public."child_events" CASCADE;
+DROP TABLE IF EXISTS public."children" CASCADE;
+DROP TABLE IF EXISTS public."credentials" CASCADE;
+DROP TABLE IF EXISTS public."device_tokens" CASCADE;
+DROP TABLE IF EXISTS public."event_registrations" CASCADE;
+DROP TABLE IF EXISTS public."events" CASCADE;
+DROP TABLE IF EXISTS public."google_places_usages" CASCADE;
+DROP TABLE IF EXISTS public."group_teachers" CASCADE;
+DROP TABLE IF EXISTS public."groups" CASCADE;
+DROP TABLE IF EXISTS public."guardian_claims" CASCADE;
+DROP TABLE IF EXISTS public."meal_cancellations" CASCADE;
+DROP TABLE IF EXISTS public."media" CASCADE;
+DROP TABLE IF EXISTS public."message_confirmations" CASCADE;
+DROP TABLE IF EXISTS public."message_reactions" CASCADE;
+DROP TABLE IF EXISTS public."message_reads" CASCADE;
+DROP TABLE IF EXISTS public."messages" CASCADE;
+DROP TABLE IF EXISTS public."organization_features" CASCADE;
+DROP TABLE IF EXISTS public."organization_stripe_accounts" CASCADE;
+DROP TABLE IF EXISTS public."organizations" CASCADE;
+DROP TABLE IF EXISTS public."parent_children" CASCADE;
+DROP TABLE IF EXISTS public."parent_invites" CASCADE;
+DROP TABLE IF EXISTS public."parent_subscriptions" CASCADE;
+DROP TABLE IF EXISTS public."password_resets" CASCADE;
+DROP TABLE IF EXISTS public."payments" CASCADE;
+DROP TABLE IF EXISTS public."places" CASCADE;
+DROP TABLE IF EXISTS public."platform_settings" CASCADE;
+DROP TABLE IF EXISTS public."poll_options" CASCADE;
+DROP TABLE IF EXISTS public."poll_votes" CASCADE;
+DROP TABLE IF EXISTS public."polls" CASCADE;
+DROP TABLE IF EXISTS public."recommendations" CASCADE;
+DROP TABLE IF EXISTS public."registration_links" CASCADE;
+DROP TABLE IF EXISTS public."sessions" CASCADE;
+DROP TABLE IF EXISTS public."signup_claims" CASCADE;
+DROP TABLE IF EXISTS public."signup_slots" CASCADE;
+DROP TABLE IF EXISTS public."teacher_invites" CASCADE;
+
+-- 2. Widoki
+-- (brak)
+
+-- 3. Sekwencje
+-- (brak)
+
+-- 4. Własne typy (enum/domain)
+-- (brak)
+
+COMMIT;

@@ -63,6 +63,13 @@ func CreateMessage(ctx context.Context, argument chatspg.MessageCreateArgument, 
 		return res, err
 	}
 
+	if argument.ReplyToId != "" {
+		target, loadErr := LoadMessage(ctx, argument.ReplyToId)
+		if loadErr != nil || target.ChannelId != argument.ChannelId {
+			return res, errors.New("reply target must be a message in the same channel")
+		}
+	}
+
 	var (
 		usesMutation = &chatspg.MessageCreateMutation{
 			Foundation: argument,

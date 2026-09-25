@@ -39,6 +39,8 @@ func CreatePoll(ctx context.Context, argument chatspg.PollCreateArgument, accoun
 		Question:      argument.Question,
 		AllowMultiple: argument.AllowMultiple,
 		ClosesAt:      argument.ClosesAt,
+		Anonymous:     argument.Anonymous,
+		Kind:          argument.Kind,
 	}.Populate()
 
 	if err = gormdb.Create(ctx, pollRow); err != nil {

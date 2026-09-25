@@ -7,6 +7,9 @@ const (
 	MessageTypeText
 	MessageTypePoll
 	MessageTypeSystem
+	// Appended after the last value (stored as an int ordinal -- never insert in the middle).
+	MessageTypeConsent
+	MessageTypeSignup
 )
 
 func (m MessageType) String() string {
@@ -17,6 +20,10 @@ func (m MessageType) String() string {
 		return "Poll"
 	case MessageTypeSystem:
 		return "System"
+	case MessageTypeConsent:
+		return "Consent"
+	case MessageTypeSignup:
+		return "Signup"
 	default:
 		return "Unknown"
 	}

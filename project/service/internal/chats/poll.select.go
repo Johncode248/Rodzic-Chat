@@ -98,10 +98,31 @@ func GetPollDetail(ctx context.Context, pollId, callerAccountId string) (res cha
 
 	counts := make(map[string]int, len(optionsResult.Options))
 	var myVotes []string
+	votersByOption := map[string][]string{}
 	for _, vote := range votesResult.PollVotes {
 		counts[vote.OptionId]++
 		if vote.AccountId == callerAccountId {
 			myVotes = append(myVotes, vote.OptionId)
+		}
+	}
+
+	// Named voters per option, unless the poll is anonymous -- an anonymous poll only ever
+	// exposes tallies and the caller's own choice.
+	if !poll.Anonymous && len(votesResult.PollVotes) > 0 {
+		names, nameErr := AccountNames(ctx, func() []string {
+			ids := make([]string, 0, len(votesResult.PollVotes))
+			for _, vote := range votesResult.PollVotes {
+				ids = append(ids, vote.AccountId)
+			}
+			return ids
+		}())
+		if nameErr != nil {
+			return res, nameErr
+		}
+		for _, vote := range votesResult.PollVotes {
+			if name := names[vote.AccountId]; name != "" {
+				votersByOption[vote.OptionId] = append(votersByOption[vote.OptionId], name)
+			}
 		}
 	}
 
@@ -117,5 +138,6 @@ func GetPollDetail(ctx context.Context, pollId, callerAccountId string) (res cha
 		Poll:    poll,
 		Options: optionsWithCount,
 		MyVotes: myVotes,
+		Voters:  votersByOption,
 	}, nil
 }

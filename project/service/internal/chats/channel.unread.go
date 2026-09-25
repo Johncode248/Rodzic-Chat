@@ -13,10 +13,14 @@ import (
 type latestMessagePerChannelRow struct {
 	ChannelId string
 	Id        string
+	SenderId  string
 }
 
 // AttachUnreadFlags sets Channel.Unread in place for each channel: true when the channel's most
-// recent message has no MessageRead row for accountId. Read tracking is per-message only (no
+// recent message was written by SOMEONE ELSE and has no MessageRead row for accountId (the
+// caller's own message is never "unread" for them -- nobody records a read for their own send,
+// so without this a parent whose last word closed the conversation kept a permanent badge).
+// Read tracking is per-message only (no
 // channel-level read cursor exists), so "unread" is derived rather than stored -- a channel with
 // no messages at all is never unread. Called by both the org-scoped and org-less channel-list
 // handlers, which are the only two call sites that know who's actually asking.
@@ -38,7 +42,7 @@ func AttachUnreadFlags(ctx context.Context, channels []chatspg.Channel, accountI
 
 	var latestRows []latestMessagePerChannelRow
 	if err := gormdb.GormDB.WithContext(ctx).Model(&chatspg.Message{}).
-		Select("DISTINCT ON (channel_id) channel_id, id").
+		Select("DISTINCT ON (channel_id) channel_id, id, sender_id").
 		Where("channel_id IN ?", channelIds).
 		Order("channel_id, create_time DESC").
 		Scan(&latestRows).Error; err != nil {
@@ -46,9 +50,11 @@ func AttachUnreadFlags(ctx context.Context, channels []chatspg.Channel, accountI
 	}
 
 	latestMessageIdByChannel := make(map[string]string, len(latestRows))
+	latestSenderByChannel := make(map[string]string, len(latestRows))
 	messageIds := make([]string, 0, len(latestRows))
 	for _, row := range latestRows {
 		latestMessageIdByChannel[row.ChannelId] = row.Id
+		latestSenderByChannel[row.ChannelId] = row.SenderId
 		messageIds = append(messageIds, row.Id)
 	}
 
@@ -70,7 +76,7 @@ func AttachUnreadFlags(ctx context.Context, channels []chatspg.Channel, accountI
 
 	for i, channel := range channels {
 		latestId, hasMessages := latestMessageIdByChannel[channel.Id]
-		channels[i].Unread = hasMessages && !readMessageIds[latestId]
+		channels[i].Unread = hasMessages && latestSenderByChannel[channel.Id] != accountId && !readMessageIds[latestId]
 	}
 
 	return channels, nil

@@ -14,6 +14,10 @@ type Poll struct {
 	AllowMultiple bool       `json:"allow_multiple,omitempty"`
 	ClosesAt      *time.Time `json:"closes_at,omitempty"`
 	CreateTime    time.Time  `json:"create_time,omitempty" gorm:"not null"`
+	// Anonymous hides who voted for what (only tallies are returned). Kind is "" for a normal
+	// choice poll or "dates" for a date/time poll whose option texts are RFC3339 timestamps.
+	Anonymous bool   `json:"anonymous,omitempty"`
+	Kind      string `json:"kind,omitempty"`
 }
 
 type PollOption struct {

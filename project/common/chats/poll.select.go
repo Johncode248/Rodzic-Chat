@@ -55,4 +55,6 @@ type PollDetailResponse struct {
 	Poll    Poll                  `json:"poll,omitempty"`
 	Options []PollOptionWithCount `json:"options,omitempty"`
 	MyVotes []string              `json:"my_votes,omitempty"`
+	// Voters maps option id -> display names of who voted for it. Empty for an anonymous poll.
+	Voters map[string][]string `json:"voters,omitempty"`
 }

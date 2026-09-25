@@ -155,6 +155,8 @@ func Start() {
 	private.HandleFunc("/accounts", accountsgt.Context).Methods("GET")
 	private.HandleFunc("/accounts", accountsgt.Delete).Methods("DELETE")
 	private.HandleFunc("/accounts", accountsgt.Update).Methods("PATCH")
+	// Same limiter as password recovery/reset: the current password is a guessable secret.
+	private.Handle("/accounts/password", passwordResetRateLimit(http.HandlerFunc(authgt.ChangePassword))).Methods("POST")
 
 	// Push notification device tokens: registered on login/app launch,
 	// unregistered on logout. Any authenticated account, no feature gate --
@@ -191,6 +193,10 @@ func Start() {
 
 	// Director dashboard activity feed (see project/common/dashboard).
 	private.Handle("/dashboard/feed", staffOnlyRoster(http.HandlerFunc(dashboardgt.Feed))).Methods("GET")
+	// Parent-facing "Panel główny" monthly digest (see project/common/dashboard/monthly_summary.go)
+	// -- not staff-only, unlike the feed above: every parent account may call this for their own
+	// accountId, no roster/organization check needed since it's entirely self-scoped.
+	private.HandleFunc("/dashboard/monthly-summary", dashboardgt.MonthlySummary).Methods("GET")
 
 	// Guardian claims: review queue for the "second parent matched an
 	// existing child by name but the birth date didn't agree" security
@@ -390,6 +396,19 @@ func Start() {
 	private.Handle("/chats/polls/votes", chatFeature(http.HandlerFunc(chatsgt.CastVote))).Methods("POST")
 	private.Handle("/chats/polls/votes", chatFeature(http.HandlerFunc(chatsgt.RetractVote))).Methods("DELETE")
 
+	private.Handle("/chats/messages/pin", chatFeature(staffOnly(http.HandlerFunc(chatsgt.PinMessage)))).Methods("POST")
+
+	// Consents ("confirm you read/agree"; staff create + remind, any member confirms) and signup
+	// lists ("kto przyniesie..."; any poster creates, any reader claims).
+	private.Handle("/chats/consents", chatFeature(staffOnly(http.HandlerFunc(chatsgt.CreateConsent)))).Methods("POST")
+	private.Handle("/chats/consents/confirm", chatFeature(http.HandlerFunc(chatsgt.ConfirmConsent))).Methods("POST")
+	private.Handle("/chats/consents/status", chatFeature(http.HandlerFunc(chatsgt.ConsentStatus))).Methods("GET")
+	private.Handle("/chats/consents/remind", chatFeature(staffOnly(http.HandlerFunc(chatsgt.RemindConsent)))).Methods("POST")
+	private.Handle("/chats/signups", chatFeature(http.HandlerFunc(chatsgt.CreateSignup))).Methods("POST")
+	private.Handle("/chats/signups", chatFeature(http.HandlerFunc(chatsgt.SelectSignup))).Methods("GET")
+	private.Handle("/chats/signups/claim", chatFeature(http.HandlerFunc(chatsgt.ClaimSlot))).Methods("POST")
+	private.Handle("/chats/signups/claim", chatFeature(http.HandlerFunc(chatsgt.UnclaimSlot))).Methods("DELETE")
+
 	private.Handle("/chats/messages/reads", chatFeature(http.HandlerFunc(chatsgt.MarkRead))).Methods("POST")
 	private.Handle("/chats/messages/reads", chatFeature(http.HandlerFunc(chatsgt.SelectReads))).Methods("GET")
 
@@ -407,6 +426,7 @@ func Start() {
 	private.HandleFunc("/chats/parent-channels/members", chatsgt.SelectParentChannelMembers).Methods("GET")
 	private.HandleFunc("/chats/parent-channels/members", chatsgt.RemoveParentChannelMember).Methods("DELETE")
 	private.HandleFunc("/chats/parent-channels/rename", chatsgt.RenameParentChannel).Methods("PATCH")
+	private.HandleFunc("/chats/parent-channels/messages/pin", chatsgt.PinParentChannelMessage).Methods("POST")
 	private.HandleFunc("/chats/parent-channels/messages/reads", chatsgt.MarkParentChannelMessageRead).Methods("POST")
 	private.HandleFunc("/chats/parent-channels/messages/reads", chatsgt.SelectParentChannelMessageReads).Methods("GET")
 	private.HandleFunc("/chats/parent-channels/messages/reactions", chatsgt.UpsertParentChannelMessageReaction).Methods("POST")

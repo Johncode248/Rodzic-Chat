@@ -91,6 +91,8 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 		Type:           chatspg.MessageTypeText,
 		Content:        request.Content,
 		AttachmentUrl:  request.AttachmentUrl,
+		Urgent:         request.Urgent,
+		ReplyToId:      request.ReplyToId,
 	}, accountType)
 	if err != nil {
 		status := http.StatusForbidden
@@ -157,6 +159,10 @@ func notifyNewMessage(channel chatspg.Channel, senderId string, message chatspg.
 	const maxBodyLen = 160
 	if len(body) > maxBodyLen {
 		body = body[:maxBodyLen] + "…"
+	}
+
+	if message.Urgent {
+		title = "PILNE · " + title
 	}
 
 	push.SendToAccounts(ctx, targets, title, body, map[string]string{

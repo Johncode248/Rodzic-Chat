@@ -61,6 +61,8 @@ func CreateParentChannelMessage(w http.ResponseWriter, r *http.Request) {
 		Type:           chatspg.MessageTypeText,
 		Content:        request.Content,
 		AttachmentUrl:  request.AttachmentUrl,
+		Urgent:         request.Urgent,
+		ReplyToId:      request.ReplyToId,
 	}, accountType)
 	if err != nil {
 		status := http.StatusForbidden

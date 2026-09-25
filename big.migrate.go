@@ -109,6 +109,19 @@ func BigMigrate() {
 		panic(err)
 	}
 
+	// AutoMigrate never drops an existing constraint. Channel/Message used to carry a foreign key
+	// to organizations; org-less parent-to-parent chats use OrganizationId "" (no such row), so on
+	// any database created before that FK was removed from the models the insert is rejected
+	// (SQLSTATE 23503). Dropping is idempotent: a no-op where the constraint is already gone.
+	for _, statement := range []string{
+		"ALTER TABLE channels DROP CONSTRAINT IF EXISTS fk_channels_organization",
+		"ALTER TABLE messages DROP CONSTRAINT IF EXISTS fk_messages_organization",
+	} {
+		if err := gormdb.GormDB.Exec(statement).Error; err != nil {
+			panic(err)
+		}
+	}
+
 	if err := gormdb.Migrate(context.Background(), chatspg.Poll{}); err != nil {
 		panic(err)
 	}
@@ -126,6 +139,18 @@ func BigMigrate() {
 	}
 
 	if err := gormdb.Migrate(context.Background(), chatspg.MessageReaction{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), chatspg.MessageConfirmation{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), chatspg.SignupSlot{}); err != nil {
+		panic(err)
+	}
+
+	if err := gormdb.Migrate(context.Background(), chatspg.SignupClaim{}); err != nil {
 		panic(err)
 	}
 

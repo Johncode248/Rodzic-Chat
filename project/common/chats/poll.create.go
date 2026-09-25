@@ -19,6 +19,8 @@ type PollCreateArgument struct {
 	Options       []string   `json:"options,omitempty" validate:"required,min=2,dive,required,max=256"`
 	AllowMultiple bool       `json:"allow_multiple,omitempty"`
 	ClosesAt      *time.Time `json:"closes_at,omitempty"`
+	Anonymous     bool       `json:"anonymous,omitempty"`
+	Kind          string     `json:"kind,omitempty" validate:"omitempty,oneof=choice dates"`
 
 	// Populated by the transport layer from JWT context, never trusted from
 	// the client body.
@@ -41,6 +43,8 @@ type PollCreateRequest struct {
 	Options       []string   `json:"options,omitempty"`
 	AllowMultiple bool       `json:"allow_multiple,omitempty"`
 	ClosesAt      *time.Time `json:"closes_at,omitempty"`
+	Anonymous     bool       `json:"anonymous,omitempty"`
+	Kind          string     `json:"kind,omitempty"`
 }
 
 type PollCreateResponse struct {
@@ -57,6 +61,8 @@ type PollRowCreateArgument struct {
 	Question      string
 	AllowMultiple bool
 	ClosesAt      *time.Time
+	Anonymous     bool
+	Kind          string
 }
 
 func (a PollRowCreateArgument) Populate() (poll Poll) {
@@ -65,6 +71,8 @@ func (a PollRowCreateArgument) Populate() (poll Poll) {
 	poll.Question = a.Question
 	poll.AllowMultiple = a.AllowMultiple
 	poll.ClosesAt = a.ClosesAt
+	poll.Anonymous = a.Anonymous
+	poll.Kind = a.Kind
 	poll.CreateTime = time.Now()
 	return poll
 }
