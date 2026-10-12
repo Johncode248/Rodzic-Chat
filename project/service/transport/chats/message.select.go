@@ -23,8 +23,12 @@ func SelectMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := logger.Enter(r.Context(), "chatsgt.SelectMessages")
 	defer logger.Exit(ctx, "chatsgt.SelectMessages", &res, &err)
 
+	// Note: organizationId may legitimately be "" here (a parent with no
+	// organization yet, e.g. one only using an org-less chat-invite
+	// channel) -- do not gate on it being non-empty, only use it below to
+	// authorize access to an org-scoped channel.
 	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
-	if err != nil || organizationId == "" {
+	if err != nil {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
 	}
@@ -32,21 +36,6 @@ func SelectMessages(w http.ResponseWriter, r *http.Request) {
 	channelId := r.URL.Query().Get("channel_id")
 	if channelId == "" {
 		http.Error(w, "Missing 'channel_id' query param", http.StatusBadRequest)
-		return
-	}
-
-	channelResult, err := chats.SelectChannels(ctx, chatspg.ChannelSelectArgument{
-		Query: databasepg.Query{
-			Limit:  1,
-			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: channelId}}}},
-		},
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(channelResult.Channels) == 0 || channelResult.Channels[0].OrganizationId != organizationId {
-		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
 		return
 	}
 
@@ -60,7 +49,46 @@ func SelectMessages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error getting accountType from context", http.StatusForbidden)
 		return
 	}
-	if err = chats.CheckReadPermission(ctx, channelResult.Channels[0], accountId, accountType); err != nil {
+
+	channelResult, err := chats.SelectChannels(ctx, chatspg.ChannelSelectArgument{
+		Query: databasepg.Query{
+			Limit:  1,
+			Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "id", Operator: "=", Value: channelId}}}},
+		},
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(channelResult.Channels) == 0 {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+		return
+	}
+	channel := channelResult.Channels[0]
+
+	// Org-scoped channel: same organization match as before. Org-less
+	// channel (e.g. a chat-invite-created Direct channel, OrganizationId
+	// == ""): there's no organization to match against, so membership in
+	// the channel itself is the access control -- see chatinvites.Accept,
+	// which is the only way to end up a member of one of these.
+	if channel.OrganizationId != "" {
+		if channel.OrganizationId != organizationId {
+			http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
+	} else {
+		isMember, err := chats.IsChannelMember(ctx, channelId, accountId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
+	}
+
+	if err = chats.CheckReadPermission(ctx, channel, accountId, accountType); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}

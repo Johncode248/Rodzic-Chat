@@ -10,11 +10,10 @@ import (
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 )
 
-// Create makes a new parent registration link for one group, director-only.
-// The returned Token is the only place the raw token is ever exposed — the
-// caller (the staff web platform) builds the shareable URL itself, e.g.
-// `${origin}/rejestracja/${token}`, since the backend has no opinion on
-// what domain that platform lives at.
+// Create makes a new parent registration invite for one group,
+// director-only. The returned Pin is the only place the raw PIN is ever
+// exposed — staff reads it off screen to hand to the parent in person or
+// over the phone; only its hash is stored.
 func Create(w http.ResponseWriter, r *http.Request) {
 	var (
 		request registrationlinkspg.CreateRequest
@@ -53,10 +52,12 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = registrationlinks.Create(ctx, registrationlinkspg.CreateArgument{
-		OrganizationId: organizationId,
-		GroupId:        request.GroupId,
-		ChildrenCount:  request.ChildrenCount,
-		CreatedBy:      accountId,
+		OrganizationId:    organizationId,
+		GroupId:           request.GroupId,
+		ChildrenCount:     request.ChildrenCount,
+		PublicDescription: request.PublicDescription,
+		InternalNote:      request.InternalNote,
+		CreatedBy:         accountId,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

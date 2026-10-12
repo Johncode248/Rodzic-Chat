@@ -8,22 +8,20 @@ import (
 	chatinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/chatinvites"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/chatinvites"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
-	"github.com/gorilla/mux"
 )
 
-// Accept handles POST /private/chat-invites/{token}/accept -- the other
-// parent, already signed in, redeems the code/link to join the inviter's
-// chat channel.
+// Accept handles POST /private/chat-invites/accept -- the other parent,
+// already signed in, redeems the PIN to join the inviter's chat channel.
+// Rate limited (see module.go).
 func Accept(w http.ResponseWriter, r *http.Request) {
 	var (
-		res chatinvitespg.AcceptResponse
-		err error
+		request chatinvitespg.AcceptRequest
+		res     chatinvitespg.AcceptResponse
+		err     error
 	)
 
-	ctx := logger.Enter(r.Context(), "chatinvitesgt.Accept")
+	ctx := logger.Enter(r.Context(), "chatinvitesgt.Accept", r.Body)
 	defer logger.Exit(ctx, "chatinvitesgt.Accept", &res, &err)
-
-	token := mux.Vars(r)["token"]
 
 	accountId, err := credentials.GetUserIdFromContext(ctx)
 	if err != nil || accountId == "" {
@@ -31,7 +29,16 @@ func Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err = chatinvites.Accept(ctx, token, accountId)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Error parsing JSON request body", http.StatusBadRequest)
+		return
+	}
+	if request.Pin == "" {
+		http.Error(w, "Missing 'pin'", http.StatusBadRequest)
+		return
+	}
+
+	res, err = chatinvites.Accept(ctx, request.Pin, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

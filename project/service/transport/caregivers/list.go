@@ -43,7 +43,14 @@ func List(w http.ResponseWriter, r *http.Request) {
 		offset = o
 	}
 
-	res, err = caregivers.List(ctx, caregiverspg.CaregiverTypeFromOrdinal(typeOrdinal), r.URL.Query().Get("query"), limit, offset)
+	var maxRate int64
+	if m, convErr := strconv.ParseInt(r.URL.Query().Get("max_rate"), 10, 64); convErr == nil && m > 0 {
+		maxRate = m
+	}
+	res, err = caregivers.Search(ctx, caregivers.SearchFilter{
+		Type: caregiverspg.CaregiverTypeFromOrdinal(typeOrdinal), Query: r.URL.Query().Get("query"),
+		City: r.URL.Query().Get("city"), Mode: r.URL.Query().Get("mode"), MaxRate: maxRate, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

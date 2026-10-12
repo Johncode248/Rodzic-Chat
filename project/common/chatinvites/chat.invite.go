@@ -10,11 +10,14 @@ import (
 // -- into a private 1:1 chat. Entirely peer-to-peer, mirrors
 // project/common/parentinvites.ParentInvite but accepting one adds a
 // chatspg.ChannelMember row instead of linking children. Single-use
-// (ConsumedByAccountId sits empty until someone accepts), expires after 7
-// days.
+// (ConsumedByAccountId sits empty until someone accepts), expires after 72
+// hours. Both inviter and accepter must already be authenticated accounts
+// -- PinHash is the sha256 digest (see library/pinhash) of an 8-digit PIN
+// (see library/random.GeneratePin); the plaintext PIN is returned once, on
+// creation, and never stored anywhere.
 type ChatInvite struct {
 	Id                  string           `json:"id,omitempty" gorm:"primaryKey"`
-	Token               string           `json:"token,omitempty" gorm:"not null;uniqueIndex"`
+	PinHash             string           `json:"-" gorm:"not null;uniqueIndex"`
 	ChannelId           string           `json:"channel_id,omitempty" gorm:"not null;index"`
 	Channel             *chatspg.Channel `json:"-" gorm:"foreignKey:ChannelId;references:Id;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
 	InviterAccountId    string           `json:"inviter_account_id,omitempty" gorm:"not null;index"`

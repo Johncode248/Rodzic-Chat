@@ -3,6 +3,7 @@ package chats
 import (
 	"context"
 	"errors"
+	"sort"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
@@ -13,6 +14,8 @@ import (
 
 var ErrNotChannelAdmin = errors.New("only the channel's admin may do this")
 var ErrCannotRemoveAdmin = errors.New("the channel admin cannot be removed -- they can only leave")
+var ErrNoPermission = errors.New("you do not have permission to do this in this chat")
+var ErrCannotModerateTarget = errors.New("you cannot do this to that member")
 
 // IsChannelMember reports whether accountId has a ChannelMember row for
 // channelId -- the authorization check for the org-less parent-channel
@@ -21,10 +24,15 @@ var ErrCannotRemoveAdmin = errors.New("the channel admin cannot be removed -- th
 // package.
 func IsChannelMember(ctx context.Context, channelId, accountId string) (bool, error) {
 	member, err := getMember(ctx, channelId, accountId)
+	if err != nil || member == nil {
+		return false, err
+	}
+	// An active ban keeps the membership row but shuts the person out (see ChannelBan).
+	ban, err := ActiveBan(ctx, channelId, accountId)
 	if err != nil {
 		return false, err
 	}
-	return member != nil, nil
+	return ban == nil, nil
 }
 
 func getMember(ctx context.Context, channelId, accountId string) (*chatspg.ChannelMember, error) {
@@ -73,9 +81,10 @@ func CountAdminChannels(ctx context.Context, accountId string) (int, error) {
 	return len(members), nil
 }
 
-// ListMembers returns a channel's roster with display names attached, newest first isn't
-// meaningful here so it's returned admin-first then by join order.
-func ListMembers(ctx context.Context, channelId string) (res chatspg.ChannelMemberListResponse, err error) {
+// ListMembers returns a channel's roster with display names attached, admin first then by join
+// order, plus the caller's own role/permissions. Ban details are included only for callers who may
+// see them (PermBan).
+func ListMembers(ctx context.Context, channelId, callerAccountId string) (res chatspg.ChannelMemberListResponse, err error) {
 	members, err := gormdb.Select[chatspg.ChannelMember](ctx, databasepg.Query{
 		Groups: []databasepg.Group{
 			{Filters: []databasepg.Filter{{Key: "channel_id", Operator: "=", Value: channelId}}},
@@ -105,29 +114,53 @@ func ListMembers(ctx context.Context, channelId string) (res chatspg.ChannelMemb
 		}
 	}
 
-	infos := make([]chatspg.ChannelMemberInfo, 0, len(members))
-	for _, m := range members {
-		// Admin first, then join order -- a small, deliberate re-sort after the
-		// create_time-ordered query above (admin is nearly always first anyway
-		// since they created the channel, but this makes it a guarantee).
-		infos = append(infos, chatspg.ChannelMemberInfo{AccountId: m.AccountId, DisplayName: nameById[m.AccountId], Role: m.Role})
+	var caller *chatspg.ChannelMember
+	for i := range members {
+		if members[i].AccountId == callerAccountId {
+			caller = &members[i]
+		}
 	}
-	for i := 1; i < len(infos); i++ {
-		if infos[i].Role == chatspg.ChannelMemberRoleAdmin {
-			admin := infos[i]
-			copy(infos[1:i+1], infos[0:i])
-			infos[0] = admin
-			break
+	callerPerms := chatspg.ChannelPermission(0)
+	if caller != nil {
+		res.MyRole = caller.Role
+		callerPerms = caller.EffectivePermissions()
+		res.MyPermissions = callerPerms
+	}
+	bansById := map[string]chatspg.ChannelBan{}
+	if callerPerms.Has(chatspg.PermBan) {
+		bans, banErr := ListActiveBans(ctx, channelId)
+		if banErr != nil {
+			return res, banErr
+		}
+		for _, b := range bans {
+			bansById[b.AccountId] = b
 		}
 	}
 
-	return chatspg.ChannelMemberListResponse{Members: infos}, nil
+	infos := make([]chatspg.ChannelMemberInfo, 0, len(members))
+	for _, m := range members {
+		info := chatspg.ChannelMemberInfo{
+			AccountId: m.AccountId, DisplayName: nameById[m.AccountId], Role: m.Role,
+			Permissions: m.EffectivePermissions(), GrantedPermissions: m.Permissions,
+		}
+		if ban, ok := bansById[m.AccountId]; ok {
+			info.BannedUntil = ban.Until
+			info.BannedForever = ban.Until == nil
+		}
+		infos = append(infos, info)
+	}
+	// Admin first, then join order.
+	sort.SliceStable(infos, func(i, j int) bool {
+		return infos[i].Role == chatspg.ChannelMemberRoleAdmin && infos[j].Role != chatspg.ChannelMemberRoleAdmin
+	})
+	res.Members = infos
+	return res, nil
 }
 
-// RemoveMember handles both "leave" (targetAccountId == callerAccountId, always allowed for a
-// non-admin; an admin leaving is also allowed -- the channel simply keeps going with no admin,
-// see this package's doc notes) and "kick" (targetAccountId != callerAccountId, which requires
-// callerAccountId to be the channel's admin, and can never target the admin themselves).
+// RemoveMember handles both "leave" (targetAccountId == callerAccountId, always allowed; an admin
+// leaving is also allowed -- the channel simply keeps going with no admin) and "kick"
+// (targetAccountId != callerAccountId), which requires PermRemoveMembers and that the caller
+// outranks the target (see canModerate).
 func RemoveMember(ctx context.Context, channelId, targetAccountId, callerAccountId string) error {
 	target, err := getMember(ctx, channelId, targetAccountId)
 	if err != nil {
@@ -138,15 +171,8 @@ func RemoveMember(ctx context.Context, channelId, targetAccountId, callerAccount
 	}
 
 	if targetAccountId != callerAccountId {
-		callerIsAdmin, adminErr := IsChannelAdmin(ctx, channelId, callerAccountId)
-		if adminErr != nil {
-			return adminErr
-		}
-		if !callerIsAdmin {
-			return ErrNotChannelAdmin
-		}
-		if target.Role == chatspg.ChannelMemberRoleAdmin {
-			return ErrCannotRemoveAdmin
+		if err = requireModeration(ctx, channelId, callerAccountId, target, chatspg.PermRemoveMembers); err != nil {
+			return err
 		}
 	}
 

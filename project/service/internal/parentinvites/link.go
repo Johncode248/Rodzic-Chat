@@ -34,7 +34,7 @@ func linkToInviterChildren(ctx context.Context, invite parentinvitespg.ParentInv
 	now := time.Now()
 	claimResult := gormdb.GormDB.WithContext(ctx).
 		Model(&parentinvitespg.ParentInvite{}).
-		Where("token = ? AND consumed_by_account_id = ''", invite.Token).
+		Where("id = ? AND consumed_by_account_id = ''", invite.Id).
 		Updates(map[string]interface{}{"consumed_by_account_id": accepterAccountId, "consumed_at": now})
 	if claimResult.Error != nil {
 		return res, claimResult.Error

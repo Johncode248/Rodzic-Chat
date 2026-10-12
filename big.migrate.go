@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	absencespg "github.com/Johncode248/Rodzic-Chat/project/common/absences"
 	accountorganizationspg "github.com/Johncode248/Rodzic-Chat/project/common/accountorganizations"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
+	announcementspg "github.com/Johncode248/Rodzic-Chat/project/common/announcements"
+	avatarspg "github.com/Johncode248/Rodzic-Chat/project/common/avatars"
 	caregiverspg "github.com/Johncode248/Rodzic-Chat/project/common/caregivers"
 	chatinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/chatinvites"
 	chatspg "github.com/Johncode248/Rodzic-Chat/project/common/chats"
 	childeventspg "github.com/Johncode248/Rodzic-Chat/project/common/childevents"
+	childhealthpg "github.com/Johncode248/Rodzic-Chat/project/common/childhealth"
 	childrenpg "github.com/Johncode248/Rodzic-Chat/project/common/children"
 	credentialspg "github.com/Johncode248/Rodzic-Chat/project/common/credentials"
 	devicetokenspg "github.com/Johncode248/Rodzic-Chat/project/common/devicetokens"
@@ -19,8 +23,10 @@ import (
 	groupspg "github.com/Johncode248/Rodzic-Chat/project/common/groups"
 	groupteacherspg "github.com/Johncode248/Rodzic-Chat/project/common/groupteachers"
 	guardianclaimspg "github.com/Johncode248/Rodzic-Chat/project/common/guardianclaims"
+	helprequestspg "github.com/Johncode248/Rodzic-Chat/project/common/helprequests"
 	mealspg "github.com/Johncode248/Rodzic-Chat/project/common/meals"
 	mediapg "github.com/Johncode248/Rodzic-Chat/project/common/media"
+	nfzpg "github.com/Johncode248/Rodzic-Chat/project/common/nfz"
 	organizationspg "github.com/Johncode248/Rodzic-Chat/project/common/organizations"
 	organizationstripeaccountspg "github.com/Johncode248/Rodzic-Chat/project/common/organizationstripeaccounts"
 	parentchildpg "github.com/Johncode248/Rodzic-Chat/project/common/parentchild"
@@ -32,248 +38,204 @@ import (
 	platformsettingspg "github.com/Johncode248/Rodzic-Chat/project/common/platformsettings"
 	registrationlinkspg "github.com/Johncode248/Rodzic-Chat/project/common/registrationlinks"
 	sessionspg "github.com/Johncode248/Rodzic-Chat/project/common/sessions"
+	shoppingpg "github.com/Johncode248/Rodzic-Chat/project/common/shopping"
 	teacherinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/teacherinvites"
+	todospg "github.com/Johncode248/Rodzic-Chat/project/common/todos"
 )
 
+// BigMigrate creates the schema of the product as it runs TODAY: the mobile app for personal (parent) accounts.
+//
+//	identity     accounts, credentials, sessions, password_resets, device_tokens, avatars
+//	family       children (+ blood_type / health_note of the health card), parent_children, parent_invites
+//	calendar     child_events, child_event_children, child_event_parents
+//	tasks        todos, todo_snoozes, todo_prefs
+//	health       child_allergies, child_doctors, child_measurements, child_episodes, child_episode_entries,
+//	             child_medications, child_doses
+//	shopping     shopping_lists, shopping_items
+//	community    help_requests, help_replies, help_reply_votes, help_photos, category_follows, announcements
+//	nfz          nfz_saved_places
+//
+// Everything that belongs to placówki (organizations, groups, teachers, school chat/polls, payments, school events,
+// absences, meals, media, plus the dormant caregivers/places features) lives in migratePlacowkiModule below. It is kept
+// compiling but NOT called -- see the commented call. Enabling it later is two steps: uncomment the call and set
+// modules.Organizations = true (project/common/modules).
 func BigMigrate() {
 	ctx := context.Background()
 
-	// Serializes migrations across every process connected to this
-	// database (see AcquireMigrationLock's doc comment) -- without it, two
-	// instances booting concurrently during a rolling deploy can race
-	// AutoMigrate's own check-then-act ADD COLUMN/CREATE INDEX logic and
-	// crash-loop on a Postgres "already exists" error.
+	// Serializes migrations across every process connected to this database -- without it two instances booting
+	// concurrently during a rolling deploy can race AutoMigrate's check-then-act ADD COLUMN/CREATE INDEX logic.
 	lockConn, err := gormdb.AcquireMigrationLock(ctx)
 	if err != nil {
 		panic(err)
 	}
 	defer gormdb.ReleaseMigrationLock(ctx, lockConn)
 
-	if err := gormdb.Migrate(context.Background(), organizationspg.Organization{}); err != nil {
-		panic(err)
-	}
+	migrate(ctx,
+		// identity -- accounts first: nearly every other table points at it.
+		accountspg.Account{},
+		credentialspg.Credential{},
+		sessionspg.Session{},
+		passwordresetspg.PasswordReset{},
+		devicetokenspg.DeviceToken{},
+		avatarspg.Avatar{},
 
-	if err := gormdb.Migrate(context.Background(), accountspg.Account{}); err != nil {
-		panic(err)
-	}
+		// family
+		childrenpg.Child{},
+		parentchildpg.ParentChild{},
+		parentinvitespg.ParentInvite{},
 
-	if err := gormdb.Migrate(context.Background(), devicetokenspg.DeviceToken{}); err != nil {
-		panic(err)
-	}
+		// calendar
+		childeventspg.ChildEvent{},
+		childeventspg.ChildEventChild{},
+		childeventspg.ChildEventParent{},
 
-	if err := gormdb.Migrate(context.Background(), accountorganizationspg.AccountOrganization{}); err != nil {
-		panic(err)
-	}
+		// tasks
+		todospg.Todo{},
+		todospg.Snooze{},
+		todospg.Prefs{},
 
-	if err := gormdb.Migrate(context.Background(), credentialspg.Credential{}); err != nil {
-		panic(err)
-	}
+		// child health card + illness diary
+		childhealthpg.Allergy{},
+		childhealthpg.Doctor{},
+		childhealthpg.Measurement{},
+		childhealthpg.Episode{},
+		childhealthpg.Entry{},
+		childhealthpg.Medication{},
+		childhealthpg.Dose{},
 
-	if err := gormdb.Migrate(context.Background(), sessionspg.Session{}); err != nil {
-		panic(err)
-	}
+		// shopping lists
+		shoppingpg.List{},
+		shoppingpg.Item{},
 
-	if err := gormdb.Migrate(context.Background(), passwordresetspg.PasswordReset{}); err != nil {
-		panic(err)
-	}
+		// community: "Szukam / Polecam", platform announcements, NFZ
+		helprequestspg.HelpRequest{},
+		helprequestspg.HelpReply{},
+		helprequestspg.HelpReplyVote{},
+		helprequestspg.HelpPhoto{},
+		helprequestspg.CategoryFollow{},
+		announcementspg.Announcement{},
+		nfzpg.SavedPlace{},
+	)
 
-	if err := gormdb.Migrate(context.Background(), featurespg.OrganizationFeature{}); err != nil {
-		panic(err)
-	}
+	applyConstraints(ctx)
 
-	if err := gormdb.Migrate(context.Background(), childrenpg.Child{}); err != nil {
-		panic(err)
-	}
+	// PLACÓWKI -- not needed by the personal-account app. Uncomment together with modules.Organizations = true.
+	// migratePlacowkiModule(ctx)
+}
 
-	if err := gormdb.Migrate(context.Background(), groupspg.Group{}); err != nil {
-		panic(err)
+func migrate(ctx context.Context, models ...interface{}) {
+	for _, m := range models {
+		if err := gormdb.Migrate(ctx, m); err != nil {
+			panic(err)
+		}
 	}
+}
 
-	if err := gormdb.Migrate(context.Background(), groupteacherspg.GroupTeacher{}); err != nil {
-		panic(err)
+// constraint is a database-level rule GORM's AutoMigrate cannot express (or that would need an import cycle between
+// model packages). Added idempotently, so BigMigrate stays safe to run on every boot.
+type constraint struct {
+	table, name, definition string
+}
+
+var constraints = []constraint{
+	// Personal data is erased with its owner: hard-deleting an account (cmd/reaper) or a child removes everything below.
+	{"credentials", "fk_credentials_account", "FOREIGN KEY (user_id) REFERENCES accounts(id) ON DELETE CASCADE"},
+	{"parent_invites", "fk_parent_invites_inviter", "FOREIGN KEY (inviter_account_id) REFERENCES accounts(id) ON DELETE CASCADE"},
+	{"nfz_saved_places", "fk_nfz_saved_places_account", "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE"},
+	{"child_events", "fk_child_events_creator", "FOREIGN KEY (created_by_account_id) REFERENCES accounts(id) ON DELETE CASCADE"},
+
+	{"child_allergies", "fk_child_allergies_child", "FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE"},
+	{"child_doctors", "fk_child_doctors_child", "FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE"},
+	{"child_measurements", "fk_child_measurements_child", "FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE"},
+	{"child_episodes", "fk_child_episodes_child", "FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE"},
+	{"child_episode_entries", "fk_child_entries_episode", "FOREIGN KEY (episode_id) REFERENCES child_episodes(id) ON DELETE CASCADE"},
+	{"child_medications", "fk_child_medications_child", "FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE"},
+	{"child_doses", "fk_child_doses_medication", "FOREIGN KEY (medication_id) REFERENCES child_medications(id) ON DELETE CASCADE"},
+
+	{"shopping_lists", "fk_shopping_lists_account", "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE"},
+	{"shopping_items", "fk_shopping_items_list", "FOREIGN KEY (list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE"},
+
+	// Value rules: the code validates too, the database is the last line of defence.
+	{"children", "ck_children_blood_type", "CHECK (blood_type IS NULL OR blood_type IN ('', '0+', '0-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'))"},
+	{"child_allergies", "ck_child_allergies_severity", "CHECK (severity IN ('mild', 'moderate', 'severe'))"},
+	{"child_episode_entries", "ck_child_entries_kind", "CHECK (kind IN ('temperature', 'symptom', 'note', 'medication'))"},
+	{"child_medications", "ck_child_medications_interval", "CHECK (interval_hours BETWEEN 0 AND 48 AND min_gap_hours BETWEEN 0 AND 48)"},
+	{"child_doses", "ck_child_doses_status", "CHECK (status IN ('pending', 'given', 'skipped'))"},
+	{"shopping_lists", "ck_shopping_lists_status", "CHECK (status IN ('active', 'completed'))"},
+}
+
+func applyConstraints(ctx context.Context) {
+	for _, c := range constraints {
+		statement := fmt.Sprintf(`DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '%s') THEN
+    ALTER TABLE %s ADD CONSTRAINT %s %s;
+  END IF;
+END $$`, c.name, c.table, c.name, c.definition)
+		if err := gormdb.GormDB.WithContext(ctx).Exec(statement).Error; err != nil {
+			panic(fmt.Errorf("constraint %s on %s: %w", c.name, c.table, err))
+		}
 	}
+}
 
-	if err := gormdb.Migrate(context.Background(), parentchildpg.ParentChild{}); err != nil {
-		panic(err)
-	}
+// migratePlacowkiModule creates the placówka tables (organizations, memberships, groups, teachers, school chat and
+// polls, payments, school events, absences, meals, media, invites) and the dormant parent-side extras that depend on
+// them (caregivers, places, parent subscriptions). NOT called while the app serves personal accounts only.
+func migratePlacowkiModule(ctx context.Context) {
+	migrate(ctx,
+		organizationspg.Organization{},
+		accountorganizationspg.AccountOrganization{},
+		featurespg.OrganizationFeature{},
+		groupspg.Group{},
+		groupteacherspg.GroupTeacher{},
+		guardianclaimspg.GuardianClaim{},
 
-	if err := gormdb.Migrate(context.Background(), guardianclaimspg.GuardianClaim{}); err != nil {
-		panic(err)
-	}
+		// school chat, polls, sign-ups
+		chatspg.Channel{},
+		chatspg.Message{},
+		chatspg.Poll{},
+		chatspg.PollOption{},
+		chatspg.PollVote{},
+		chatspg.MessageRead{},
+		chatspg.MessageReaction{},
+		chatspg.MessageConfirmation{},
+		chatspg.SignupSlot{},
+		chatspg.SignupClaim{},
+		chatspg.ChannelMember{},
+		chatspg.ChannelBan{},
+		chatinvitespg.ChatInvite{},
 
-	if err := gormdb.Migrate(context.Background(), chatspg.Channel{}); err != nil {
-		panic(err)
-	}
+		// school events, absences, meals, gallery
+		eventspg.Event{},
+		eventspg.EventRegistration{},
+		absencespg.Absence{},
+		mealspg.MealCancellation{},
+		mediapg.Media{},
 
-	if err := gormdb.Migrate(context.Background(), chatspg.Message{}); err != nil {
-		panic(err)
-	}
+		// joining a placówka
+		registrationlinkspg.RegistrationLink{},
+		teacherinvitespg.TeacherInvite{},
 
-	// AutoMigrate never drops an existing constraint. Channel/Message used to carry a foreign key
-	// to organizations; org-less parent-to-parent chats use OrganizationId "" (no such row), so on
-	// any database created before that FK was removed from the models the insert is rejected
-	// (SQLSTATE 23503). Dropping is idempotent: a no-op where the constraint is already gone.
+		// payments
+		platformsettingspg.PlatformSettings{},
+		organizationstripeaccountspg.OrganizationStripeAccount{},
+		paymentspg.Payment{},
+
+		// parent-side features hidden in the current app
+		parentsubscriptionspg.ParentSubscription{},
+		caregiverspg.Caregiver{},
+		caregiverspg.CaregiverRecommendation{},
+		placespg.Place{},
+		placespg.Recommendation{},
+		placespg.GooglePlacesUsage{},
+	)
+
+	// AutoMigrate never drops an existing constraint. Channel/Message used to carry a foreign key to organizations;
+	// org-less parent-to-parent chats use OrganizationId "" (no such row), so the insert would be rejected (SQLSTATE
+	// 23503) on a database created before that FK was removed. Idempotent: a no-op where the constraint is already gone.
 	for _, statement := range []string{
 		"ALTER TABLE channels DROP CONSTRAINT IF EXISTS fk_channels_organization",
 		"ALTER TABLE messages DROP CONSTRAINT IF EXISTS fk_messages_organization",
 	} {
-		if err := gormdb.GormDB.Exec(statement).Error; err != nil {
-			panic(err)
-		}
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.Poll{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.PollOption{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.PollVote{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.MessageRead{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.MessageReaction{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.MessageConfirmation{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.SignupSlot{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.SignupClaim{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatspg.ChannelMember{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), chatinvitespg.ChatInvite{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), caregiverspg.Caregiver{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), caregiverspg.CaregiverRecommendation{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), absencespg.Absence{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), eventspg.Event{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), eventspg.EventRegistration{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), mediapg.Media{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), mealspg.MealCancellation{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), registrationlinkspg.RegistrationLink{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), teacherinvitespg.TeacherInvite{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), platformsettingspg.PlatformSettings{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), organizationstripeaccountspg.OrganizationStripeAccount{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), paymentspg.Payment{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), parentsubscriptionspg.ParentSubscription{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), placespg.Place{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), placespg.Recommendation{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), placespg.GooglePlacesUsage{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), childeventspg.ChildEvent{}); err != nil {
-		panic(err)
-	}
-
-	if err := gormdb.Migrate(context.Background(), parentinvitespg.ParentInvite{}); err != nil {
-		panic(err)
-	}
-
-	//dropObsoleteColumns(ctx)
-}
-
-// dropObsoleteColumns removes columns whose Go struct fields were deleted outright (not just
-// renamed) -- AutoMigrate only ever ADDs columns/indexes, it never drops one on its own, so a
-// field removed from a struct would otherwise leave its column sitting in the DB forever. Each
-// statement is IF EXISTS, so this is safe to run on every boot (a fresh DB or one that already
-// had the column dropped both no-op cleanly) and safe to run alongside AutoMigrate under the
-// same migration lock above.
-func dropObsoleteColumns(ctx context.Context) {
-	statements := []string{
-		// Account.Login: replaced by Email as the sole login key (2026-09-17).
-		`ALTER TABLE accounts DROP COLUMN IF EXISTS login`,
-		// EventRegistration.ConsentGiven / Event.RequiresConsent: consent-gated event
-		// registration isn't supported in MVP (2026-09-17).
-		`ALTER TABLE event_registrations DROP COLUMN IF EXISTS consent_given`,
-		`ALTER TABLE events DROP COLUMN IF EXISTS requires_consent`,
-		// Group.AgeRange: unused, descriptive-only field (2026-09-17).
-		`ALTER TABLE groups DROP COLUMN IF EXISTS age_range`,
-		// ParentChild.CanPickup: written but never enforced anywhere (2026-09-17).
-		`ALTER TABLE parent_children DROP COLUMN IF EXISTS can_pickup`,
-		// ParentSubscription: stripped down to just Plan for MVP -- usage/quota tracking wasn't
-		// enforcing anything real (AI assistant is hard-disabled server-side; Google Places
-		// per-parent daily cap removed in favor of the shared global monthly budget alone)
-		// (2026-09-17).
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS ai_requests_used`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS ai_tokens_used`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS period_reset_at`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS google_places_used_today`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS google_places_usage_date`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS stripe_customer_id`,
-		`ALTER TABLE parent_subscriptions DROP COLUMN IF EXISTS stripe_subscription_id`,
-		// Organization.Subdomain/LogoUrl/PrimaryColor: unused branding fields the backend never
-		// consumed itself (2026-09-17).
-		`ALTER TABLE organizations DROP COLUMN IF EXISTS subdomain`,
-		`ALTER TABLE organizations DROP COLUMN IF EXISTS logo_url`,
-		`ALTER TABLE organizations DROP COLUMN IF EXISTS primary_color`,
-	}
-
-	for _, statement := range statements {
 		if err := gormdb.GormDB.WithContext(ctx).Exec(statement).Error; err != nil {
 			panic(err)
 		}

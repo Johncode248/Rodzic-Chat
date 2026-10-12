@@ -37,6 +37,16 @@ type contentBlock struct {
 	ToolUseId string `json:"tool_use_id,omitempty"`
 	Content   string `json:"content,omitempty"`
 	IsError   bool   `json:"is_error,omitempty"`
+
+	// image blocks (us -> assistant only, see project/service/internal/lessonplan) -- a photo of
+	// a paper plan zajęć, base64-inlined per Anthropic's Messages API image content spec.
+	Source *imageSource `json:"source,omitempty"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type anthropicMessage struct {

@@ -3,6 +3,7 @@ package caregivers
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
@@ -13,6 +14,8 @@ import (
 
 var ErrInvalidType = errors.New("invalid caregiver type")
 var ErrDisplayNameRequired = errors.New("display_name is required")
+var ErrModeRequired = errors.New("choose at least one way of working: online, at your place or travelling to the client")
+var ErrCityRequired = errors.New("city is required for in-person work")
 
 // Upsert creates or updates the caller's own Caregiver profile for the
 // given type -- there's at most one per (account, type). A parent who is
@@ -24,6 +27,13 @@ func Upsert(ctx context.Context, accountId string, req caregiverspg.UpsertReques
 	}
 	if req.DisplayName == "" {
 		return res, ErrDisplayNameRequired
+	}
+
+	if !req.Online && !req.Stationary && !req.Travel {
+		return res, ErrModeRequired
+	}
+	if (req.Stationary || req.Travel) && strings.TrimSpace(req.City) == "" {
+		return res, ErrCityRequired
 	}
 
 	now := time.Now()
@@ -42,6 +52,11 @@ func Upsert(ctx context.Context, accountId string, req caregiverspg.UpsertReques
 		updated.City = req.City
 		updated.Phone = req.Phone
 		updated.Email = req.Email
+		applyOffer(&updated, req)
+		// Any edit goes back to the admin queue.
+		updated.ReviewStatus = caregiverspg.ReviewStatusPending
+		updated.RejectReason = ""
+		updated.ReviewedAt = nil
 		updated.UpdateTime = now
 
 		if err = gormdb.Update(ctx, updated, databasepg.Query{
@@ -55,21 +70,34 @@ func Upsert(ctx context.Context, accountId string, req caregiverspg.UpsertReques
 	}
 
 	created := caregiverspg.Caregiver{
-		Id:          uuid.NewString(),
-		AccountId:   accountId,
-		Type:        caregiverType,
-		DisplayName: req.DisplayName,
-		Description: req.Description,
-		Experience:  req.Experience,
-		HourlyRate:  req.HourlyRate,
-		City:        req.City,
-		Phone:       req.Phone,
-		Email:       req.Email,
-		CreateTime:  now,
-		UpdateTime:  now,
+		Id:           uuid.NewString(),
+		AccountId:    accountId,
+		Type:         caregiverType,
+		DisplayName:  req.DisplayName,
+		Description:  req.Description,
+		Experience:   req.Experience,
+		HourlyRate:   req.HourlyRate,
+		City:         req.City,
+		Phone:        req.Phone,
+		Email:        req.Email,
+		ReviewStatus: caregiverspg.ReviewStatusPending,
+		CreateTime:   now,
+		UpdateTime:   now,
 	}
+	applyOffer(&created, req)
 	if err = gormdb.Create(ctx, &created); err != nil {
 		return res, err
 	}
 	return created, nil
+}
+
+// applyOffer copies the "what and where" part of a request onto a profile.
+func applyOffer(c *caregiverspg.Caregiver, req caregiverspg.UpsertRequest) {
+	c.Subjects = strings.TrimSpace(req.Subjects)
+	c.Online, c.Stationary, c.Travel = req.Online, req.Stationary, req.Travel
+	c.ServiceCities = strings.TrimSpace(req.ServiceCities)
+	c.TravelRadiusKm = req.TravelRadiusKm
+	if !req.Travel {
+		c.TravelRadiusKm = 0
+	}
 }

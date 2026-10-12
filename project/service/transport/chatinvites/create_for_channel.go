@@ -43,7 +43,7 @@ func CreateForChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := chatinvites.CreateForChannel(ctx, req.ChannelId, accountId)
+	invite, plaintextPin, err := chatinvites.CreateForChannel(ctx, req.ChannelId, accountId)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err == chats.ErrNotChannelAdmin {
@@ -54,7 +54,7 @@ func CreateForChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = chatinvitespg.CreateResponse{
-		Token:     invite.Token,
+		Pin:       plaintextPin,
 		ExpiresAt: invite.ExpiresAt.Format("2006-01-02"),
 	}
 	w.WriteHeader(http.StatusOK)

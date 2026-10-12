@@ -42,29 +42,25 @@ func SelectReads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Note: organizationId may legitimately be "" here -- see
+	// messageAccessible.
 	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
-	if err != nil || organizationId == "" {
+	if err != nil {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
 	}
 
-	inOrg, err := messageInOrganization(ctx, messageId, organizationId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !inOrg {
-		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
-		return
-	}
-
-	channel, found, err := channelForMessage(ctx, messageId)
+	channel, found, allowed, err := messageAccessible(ctx, messageId, organizationId, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !found {
 		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+	if !allowed {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
 		return
 	}
 	if err = chats.CheckReadPermission(ctx, channel, accountId, accountType); err != nil {

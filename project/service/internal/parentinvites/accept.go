@@ -12,13 +12,14 @@ import (
 var ErrCannotAcceptOwnInvite = errors.New("you cannot accept your own invite")
 
 // Accept links an already-authenticated account to every child the
-// inviter parents -- the path for a co-parent who already has a Rodzic
-// Chat account (see Register for the no-account-yet path).
-func Accept(ctx context.Context, token string, accepterAccountId string) (res parentinvitespg.AcceptResponse, err error) {
-	ctx = logger.Enter(ctx, "parentinvites.Accept", token, accepterAccountId)
+// inviter parents -- both inviter and accepter must already have an
+// account (there is no more no-account-yet path; see the removed
+// register.go).
+func Accept(ctx context.Context, pin string, accepterAccountId string) (res parentinvitespg.AcceptResponse, err error) {
+	ctx = logger.Enter(ctx, "parentinvites.Accept", "<redacted>", accepterAccountId)
 	defer logger.Exit(ctx, "parentinvites.Accept", &res, &err)
 
-	invite, err := getByToken(ctx, token)
+	invite, err := getByPin(ctx, pin)
 	if err != nil {
 		return res, err
 	}

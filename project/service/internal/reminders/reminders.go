@@ -8,6 +8,7 @@ package reminders
 import (
 	"context"
 	"fmt"
+	"github.com/Johncode248/Rodzic-Chat/project/common/modules"
 	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
@@ -34,6 +35,9 @@ const reminderLeadTime = 3 * 24 * time.Hour
 // event can ever be matched by two different daily runs -- that's the entire "send exactly once"
 // guarantee, without a dedicated "reminder already sent" column/table.
 func SendDueReminders(ctx context.Context, now time.Time) {
+	if !modules.Organizations {
+		return // payment and school-event reminders need the placówka module
+	}
 	targetDayStart := now.Add(reminderLeadTime).Truncate(24 * time.Hour)
 	targetDayEnd := targetDayStart.AddDate(0, 0, 1)
 

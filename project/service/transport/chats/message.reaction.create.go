@@ -32,18 +32,20 @@ func UpsertReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Note: organizationId may legitimately be "" here -- see
+	// messageAccessible.
 	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
-	if err != nil || organizationId == "" {
+	if err != nil {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
 	}
 
-	inOrg, err := messageInOrganization(ctx, request.MessageId, organizationId)
+	_, found, allowed, err := messageAccessible(ctx, request.MessageId, organizationId, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !inOrg {
+	if !found || !allowed {
 		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
 		return
 	}

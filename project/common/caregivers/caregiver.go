@@ -25,10 +25,38 @@ type Caregiver struct {
 	Experience  string              `json:"experience,omitempty"`
 	// HourlyRate is in grosze (see this repo's money convention) -- 0 means
 	// not given, not "free".
-	HourlyRate int64     `json:"hourly_rate,omitempty"`
-	City       string    `json:"city,omitempty"`
-	Phone      string    `json:"phone,omitempty"`
-	Email      string    `json:"email,omitempty"`
-	CreateTime time.Time `json:"create_time,omitempty" gorm:"not null"`
-	UpdateTime time.Time `json:"update_time,omitempty" gorm:"not null"`
+	HourlyRate int64  `json:"hourly_rate,omitempty"`
+	City       string `json:"city,omitempty"`
+	Phone      string `json:"phone,omitempty"`
+	Email      string `json:"email,omitempty"`
+	// Subjects is a comma-separated list of what is offered: school subjects for a tutor
+	// ("matematyka, angielski"), age groups / duties for a nanny ("0-3 lata, noce").
+	Subjects string `json:"subjects,omitempty"`
+	// Where the service happens -- any combination. Online needs no area; Stationary means the
+	// client comes to the caregiver (City); Travel means the caregiver comes to the client, up to
+	// TravelRadiusKm from City / inside ServiceCities.
+	Online         bool `json:"online"`
+	Stationary     bool `json:"stationary"`
+	Travel         bool `json:"travel"`
+	TravelRadiusKm int  `json:"travel_radius_km,omitempty"`
+	// ServiceCities is a comma-separated list of the cities served (in addition to City).
+	ServiceCities string `json:"service_cities,omitempty"`
+	// Verification: every new or edited profile waits for a platform admin before it appears in
+	// the directory (see ReviewStatus*). RejectReason is shown to the owner.
+	ReviewStatus ReviewStatus `json:"review_status" gorm:"not null;default:2;index"`
+	RejectReason string       `json:"reject_reason,omitempty"`
+	ReviewedAt   *time.Time   `json:"reviewed_at,omitempty"`
+	CreateTime   time.Time    `json:"create_time,omitempty" gorm:"not null"`
+	UpdateTime   time.Time    `json:"update_time,omitempty" gorm:"not null"`
 }
+
+// ReviewStatus of a caregiver profile. New values only ever appended (stored as an int).
+// The DB default is Approved so rows created before verification existed stay visible.
+type ReviewStatus int
+
+const (
+	ReviewStatusUnknown  ReviewStatus = iota
+	ReviewStatusPending               // 1: waiting for a platform admin
+	ReviewStatusApproved              // 2: visible in the directory
+	ReviewStatusRejected              // 3: not visible; owner can fix and resubmit
+)

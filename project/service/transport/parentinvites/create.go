@@ -27,14 +27,14 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := parentinvites.Create(ctx, accountId)
+	invite, plaintextPin, err := parentinvites.Create(ctx, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	res = parentinvitespg.CreateResponse{
-		Token:     invite.Token,
+		Pin:       plaintextPin,
 		ExpiresAt: invite.ExpiresAt.Format("2006-01-02"),
 	}
 	w.WriteHeader(http.StatusOK)

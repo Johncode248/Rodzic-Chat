@@ -109,3 +109,32 @@ func RateLimitMiddleware(max int, window time.Duration) func(http.Handler) http.
 		})
 	}
 }
+
+// RateLimitByAccountMiddleware is RateLimitMiddleware's counterpart for
+// the invite-PIN lookup/confirm/accept endpoints (registration-invites,
+// teacher-invites, parent-invites, chat-invites): those routes now require
+// an already-authenticated caller (see AuthMiddleware), so the natural key
+// is the caller's own account id rather than their IP -- guessing an
+// 8-digit PIN is otherwise brute-forceable in a bounded number of requests
+// per account regardless of how many IPs an attacker can spread requests
+// across. Must be mounted AFTER AuthMiddleware in the handler chain so
+// "userId" is already present in the request context. A request with no
+// resolvable account id (should not happen behind AuthMiddleware) is
+// rejected outright rather than silently exempted from the limit.
+func RateLimitByAccountMiddleware(max int, window time.Duration) func(http.Handler) http.Handler {
+	rl := newRateLimiter(max, window)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			accountId, err := GetUserIdFromContext(r.Context())
+			if err != nil || accountId == "" {
+				http.Error(w, "Error getting accountId from context", http.StatusForbidden)
+				return
+			}
+			if !rl.allow(accountId) {
+				http.Error(w, "too many requests, try again later", http.StatusTooManyRequests)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

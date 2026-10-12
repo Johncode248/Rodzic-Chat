@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"github.com/Johncode248/Rodzic-Chat/project/common/modules"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	accountorganizationspg "github.com/Johncode248/Rodzic-Chat/project/common/accountorganizations"
@@ -18,6 +19,11 @@ import (
 // unchanged until the membership table is populated. See pickActiveOrganization
 // for the pure selection logic this wraps around the DB read.
 func resolveOrganizations(ctx context.Context, accountId, primaryOrganizationId, requestedOrganizationId string) (active string, all []string, err error) {
+	if !modules.Organizations {
+		// Personal accounts have no memberships; the account's own (normally empty) OrganizationId is all there is.
+		active, all = pickActiveOrganization(nil, primaryOrganizationId, requestedOrganizationId)
+		return active, all, nil
+	}
 	result, err := accountorganizations.Select(ctx, accountorganizationspg.SelectArgument{
 		Query: databasepg.Query{
 			Groups: []databasepg.Group{

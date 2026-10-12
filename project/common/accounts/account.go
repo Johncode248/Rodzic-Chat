@@ -22,8 +22,12 @@ type Account struct {
 	// Always 0 for Parent accounts; irrelevant for Director/CoDirector,
 	// which implicitly have every permission everywhere it's checked.
 	Permissions Permission `json:"permissions,omitempty" gorm:"not null"`
-	CreateTime  time.Time  `json:"create_time,omitempty" gorm:"not null"`
-	UpdateTime  time.Time  `json:"update_time,omitempty" gorm:"not null"`
+	// LoginGroupId ties together the profiles of ONE person's login (one login, many profiles:
+	// e.g. a parent who also runs a placówka). Empty for a solo account; otherwise the id of the
+	// group's first account. Switching is only allowed inside a group (see project/service/internal/profiles).
+	LoginGroupId string    `json:"login_group_id,omitempty" gorm:"index"`
+	CreateTime   time.Time `json:"create_time,omitempty" gorm:"not null"`
+	UpdateTime   time.Time `json:"update_time,omitempty" gorm:"not null"`
 	// DeletedAt is GORM's built-in soft-delete convention: every existing
 	// gormdb.Select/gormdb.Delete call site (there are dozens) automatically
 	// excludes/soft-deletes on this field with zero code changes, because

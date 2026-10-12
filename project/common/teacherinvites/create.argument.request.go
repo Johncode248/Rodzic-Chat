@@ -1,8 +1,10 @@
 package teacherinvitespg
 
 type CreateRequest struct {
-	GroupId     string `json:"group_id,omitempty"`
-	AccountType string `json:"account_type,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Email       string `json:"email,omitempty"`
+	GroupId           string `json:"group_id,omitempty"`
+	AccountType       string `json:"account_type,omitempty"`
+	Name              string `json:"name,omitempty"`
+	Email             string `json:"email,omitempty"`
+	PublicDescription string `json:"public_description,omitempty"`
+	InternalNote      string `json:"internal_note,omitempty"`
 }

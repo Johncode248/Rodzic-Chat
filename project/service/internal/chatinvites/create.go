@@ -8,6 +8,7 @@ import (
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
+	"github.com/Johncode248/Rodzic-Chat/library/pinhash"
 	"github.com/Johncode248/Rodzic-Chat/library/random"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
@@ -19,7 +20,11 @@ import (
 	"gorm.io/gorm"
 )
 
-const expiryDays = 7
+const expiryDuration = 72 * time.Hour
+
+// maxPinGenerationAttempts bounds retrying GeneratePin on the rare
+// uniqueIndex collision on pin_hash.
+const maxPinGenerationAttempts = 5
 
 // MaxChannelsPerAccount caps how many org-less parent channels one account
 // may create (be the admin of) -- a parent can still join as many other
@@ -41,13 +46,23 @@ func resolveDisplayName(ctx context.Context, accountId string) string {
 	return "Rodzic"
 }
 
+// generatePinHash generates a fresh plaintext PIN and its hash -- the
+// caller is responsible for retrying the whole insert on a uniqueIndex
+// collision (see Create/CreateForChannel below).
+func generatePinHash() (plaintext string, hash string) {
+	plaintext = random.GeneratePin()
+	return plaintext, pinhash.HashPin(plaintext)
+}
+
 // Create sets up a brand-new, org-less channel for accountId (Type Direct,
 // OrganizationId "") -- the "rodzice między sobą" case where parents share
 // no placówka -- adds accountId as its Admin ChannelMember, and issues a
-// token to share with the first invitee (see CreateForChannel to invite
-// more people into an already-existing channel instead of starting a new
-// one). Capped at [MaxChannelsPerAccount] channels created per account.
-func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInvite, channel chatspg.Channel, err error) {
+// PIN to share with the first invitee (see CreateForChannel to invite more
+// people into an already-existing channel instead of starting a new one).
+// Capped at [MaxChannelsPerAccount] channels created per account. Returns
+// the plaintext PIN alongside the stored invite -- it's never retrievable
+// again.
+func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInvite, channel chatspg.Channel, plaintextPin string, err error) {
 	ctx = logger.Enter(ctx, "chatinvites.Create", accountId)
 	defer logger.Exit(ctx, "chatinvites.Create", &invite, &channel, &err)
 
@@ -68,14 +83,6 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 		Role:       chatspg.ChannelMemberRoleAdmin,
 		CreateTime: now,
 	}
-	invite = chatinvitespg.ChatInvite{
-		Id:               uuid.NewString(),
-		Token:            random.GenerateToken(),
-		ChannelId:        channel.Id,
-		InviterAccountId: accountId,
-		ExpiresAt:        now.AddDate(0, 0, expiryDays),
-		CreateTime:       now,
-	}
 
 	// The count-then-insert MaxChannelsPerAccount check has to happen
 	// inside one DB transaction serialized per-account, otherwise N
@@ -85,66 +92,93 @@ func Create(ctx context.Context, accountId string) (invite chatinvitespg.ChatInv
 	// concurrent call for this account queue up one at a time (auto-released
 	// when the transaction ends), so the re-count each one sees is always
 	// up to date with every insert that committed before it.
-	err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", accountId).Error; err != nil {
-			return err
+	for attempt := 0; ; attempt++ {
+		var pinHash string
+		plaintextPin, pinHash = generatePinHash()
+		invite = chatinvitespg.ChatInvite{
+			Id:               uuid.NewString(),
+			PinHash:          pinHash,
+			ChannelId:        channel.Id,
+			InviterAccountId: accountId,
+			ExpiresAt:        now.Add(expiryDuration),
+			CreateTime:       now,
 		}
 
-		var adminCount int64
-		if err := tx.Model(&chatspg.ChannelMember{}).
-			Where("account_id = ? AND role = ?", accountId, int(chatspg.ChannelMemberRoleAdmin)).
-			Count(&adminCount).Error; err != nil {
-			return err
-		}
-		if adminCount >= MaxChannelsPerAccount {
-			return ErrChannelLimitReached
-		}
+		err = gormdb.GormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", accountId).Error; err != nil {
+				return err
+			}
 
-		if err := tx.Create(&channel).Error; err != nil {
-			return err
+			var adminCount int64
+			if err := tx.Model(&chatspg.ChannelMember{}).
+				Where("account_id = ? AND role = ?", accountId, int(chatspg.ChannelMemberRoleAdmin)).
+				Count(&adminCount).Error; err != nil {
+				return err
+			}
+			if adminCount >= MaxChannelsPerAccount {
+				return ErrChannelLimitReached
+			}
+
+			if err := tx.Create(&channel).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&member).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&invite).Error; err != nil {
+				return err
+			}
+			return nil
+		})
+		if err == nil {
+			break
 		}
-		if err := tx.Create(&member).Error; err != nil {
-			return err
+		if !pinhash.IsUniqueViolation(err) || attempt >= maxPinGenerationAttempts-1 {
+			return chatinvitespg.ChatInvite{}, chatspg.Channel{}, "", err
 		}
-		if err := tx.Create(&invite).Error; err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return chatinvitespg.ChatInvite{}, chatspg.Channel{}, err
 	}
 
-	return invite, channel, nil
+	return invite, channel, plaintextPin, nil
 }
 
-// CreateForChannel issues an additional invite token for an existing
-// channel -- "Zaproś kolejną osobę" from within the channel's settings,
-// once it already has at least one member beyond its creator. Only the
-// channel's admin may do this.
-func CreateForChannel(ctx context.Context, channelId, accountId string) (invite chatinvitespg.ChatInvite, err error) {
+// CreateForChannel issues an additional invite PIN for an existing channel
+// -- "Zaproś kolejną osobę" from within the channel's settings, once it
+// already has at least one member beyond its creator. Only the channel's
+// admin may do this. Returns the plaintext PIN alongside the stored
+// invite.
+func CreateForChannel(ctx context.Context, channelId, accountId string) (invite chatinvitespg.ChatInvite, plaintextPin string, err error) {
 	ctx = logger.Enter(ctx, "chatinvites.CreateForChannel", channelId, accountId)
 	defer logger.Exit(ctx, "chatinvites.CreateForChannel", &invite, &err)
 
-	isAdmin, err := chats.IsChannelAdmin(ctx, channelId, accountId)
+	canInvite, err := chats.HasChannelPermission(ctx, channelId, accountId, chatspg.PermInvite)
 	if err != nil {
-		return invite, err
+		return invite, "", err
 	}
-	if !isAdmin {
-		return invite, chats.ErrNotChannelAdmin
+	if !canInvite {
+		return invite, "", chats.ErrNotChannelAdmin
 	}
 
 	now := time.Now()
-	invite = chatinvitespg.ChatInvite{
-		Id:               uuid.NewString(),
-		Token:            random.GenerateToken(),
-		ChannelId:        channelId,
-		InviterAccountId: accountId,
-		ExpiresAt:        now.AddDate(0, 0, expiryDays),
-		CreateTime:       now,
+	for attempt := 0; ; attempt++ {
+		var pinHash string
+		plaintextPin, pinHash = generatePinHash()
+		invite = chatinvitespg.ChatInvite{
+			Id:               uuid.NewString(),
+			PinHash:          pinHash,
+			ChannelId:        channelId,
+			InviterAccountId: accountId,
+			ExpiresAt:        now.Add(expiryDuration),
+			CreateTime:       now,
+		}
+
+		err = gormdb.Create(ctx, &invite)
+		if err == nil {
+			break
+		}
+		if !pinhash.IsUniqueViolation(err) || attempt >= maxPinGenerationAttempts-1 {
+			return chatinvitespg.ChatInvite{}, "", err
+		}
 	}
-	if err = gormdb.Create(ctx, &invite); err != nil {
-		return invite, err
-	}
-	return invite, nil
+
+	return invite, plaintextPin, nil
 }

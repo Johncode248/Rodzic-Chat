@@ -2,10 +2,13 @@ package calendar
 
 import (
 	"context"
+	"sort"
+	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
 	"github.com/Johncode248/Rodzic-Chat/logger"
+	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	calendarpg "github.com/Johncode248/Rodzic-Chat/project/common/calendar"
 	eventspg "github.com/Johncode248/Rodzic-Chat/project/common/events"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal/childevents"
@@ -48,22 +51,87 @@ func Get(ctx context.Context, accountId string) (res calendarpg.GetResponse, err
 
 	var items []calendarpg.Item
 
-	personalEvents, err := childevents.ListForChildren(ctx, childIds)
+	personalEvents, err := childevents.ListForAccount(ctx, accountId, childIds)
 	if err != nil {
 		return res, err
 	}
+
+	// Names of every parent involved (the caller, co-parents, attending parents).
+	coParents, err := childevents.CoParentIds(ctx, accountId)
+	if err != nil {
+		return res, err
+	}
+	personIds := map[string]bool{accountId: true}
+	for id := range coParents {
+		personIds[id] = true
+	}
 	for _, event := range personalEvents {
-		items = append(items, calendarpg.Item{
-			Id:          event.Id,
-			Source:      calendarpg.SourcePersonal,
-			ChildId:     event.ChildId,
-			ChildName:   childNameById[event.ChildId],
-			Title:       event.Title,
-			Description: event.Description,
-			Location:    event.Location,
-			StartTime:   event.StartTime,
-			EndTime:     event.EndTime,
-		})
+		for _, id := range event.ParentIds {
+			personIds[id] = true
+		}
+	}
+	idList := make([]string, 0, len(personIds))
+	for id := range personIds {
+		idList = append(idList, id)
+	}
+	accountRows, err := gormdb.Select[accountspg.Account](ctx, databasepg.Query{
+		Groups: []databasepg.Group{{Filters: []databasepg.Filter{{Key: "id", Operator: "IN", Value: idList}}}},
+	})
+	if err != nil {
+		return res, err
+	}
+	personName := map[string]string{}
+	for _, row := range accountRows {
+		personName[row.Id] = row.Name
+	}
+
+	windowFrom := time.Now().AddDate(0, 0, -60)
+	windowTo := time.Now().AddDate(0, 0, 400)
+	for _, event := range personalEvents {
+		childIdsOfEvent := event.ChildIds
+		if len(childIdsOfEvent) == 0 && event.ChildId != "" {
+			childIdsOfEvent = []string{event.ChildId}
+		}
+		var childNames []string
+		for _, id := range childIdsOfEvent {
+			if name, ok := childNameById[id]; ok {
+				childNames = append(childNames, name)
+			}
+		}
+		var parentNames []string
+		for _, id := range event.ParentIds {
+			parentNames = append(parentNames, personName[id])
+		}
+		firstChild, firstChildName := "", ""
+		if len(childIdsOfEvent) > 0 {
+			firstChild = childIdsOfEvent[0]
+			firstChildName = childNameById[firstChild]
+		}
+
+		for occurrence, span := range childevents.Occurrences(event, windowFrom, windowTo) {
+			items = append(items, calendarpg.Item{
+				Id:                 event.Id,
+				Source:             calendarpg.SourcePersonal,
+				ChildId:            firstChild,
+				ChildName:          firstChildName,
+				Title:              event.Title,
+				Description:        event.Description,
+				Location:           event.Location,
+				StartTime:          span.Start,
+				EndTime:            span.End,
+				ChildIds:           childIdsOfEvent,
+				ChildNames:         childNames,
+				ParentIds:          event.ParentIds,
+				ParentNames:        parentNames,
+				AllDay:             event.AllDay,
+				Recurrence:         event.Recurrence,
+				RecurrenceInterval: event.RecurrenceInterval,
+				RecurrenceUntil:    event.RecurrenceUntil,
+				Occurrence:         occurrence,
+				EventStartTime:     event.StartTime,
+				EventEndTime:       event.EndTime,
+			})
+		}
 	}
 
 	// One query per distinct organization the caller's children belong to
@@ -105,5 +173,10 @@ func Get(ctx context.Context, accountId string) (res calendarpg.GetResponse, err
 		}
 	}
 
-	return calendarpg.GetResponse{Items: items}, nil
+	response := calendarpg.GetResponse{Items: items, Me: calendarpg.Person{Id: accountId, Name: personName[accountId]}}
+	for id := range coParents {
+		response.CoParents = append(response.CoParents, calendarpg.Person{Id: id, Name: personName[id]})
+	}
+	sort.Slice(response.CoParents, func(i, j int) bool { return response.CoParents[i].Name < response.CoParents[j].Name })
+	return response, nil
 }

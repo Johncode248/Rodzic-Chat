@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/Johncode248/Rodzic-Chat/variables"
@@ -37,7 +38,10 @@ func buildAllowedOrigins() map[string]bool {
 func CorsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && allowedOrigins[origin] {
+		// Local admin console (only mounted with ADMIN_MODE=1, and loopback-only inside the
+		// handler): allow any origin -- including "null" for an HTML file opened from disk.
+		adminLocal := os.Getenv("ADMIN_MODE") == "1" && strings.HasPrefix(r.URL.Path, "/admin/api/")
+		if origin != "" && (allowedOrigins[origin] || adminLocal) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")

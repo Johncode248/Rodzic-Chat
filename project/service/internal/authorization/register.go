@@ -201,6 +201,11 @@ func defaultFeatureEnabled(feature featurespg.Feature) bool {
 	return true
 }
 
+// SeedOrganizationFeatures is the exported entry point used by profile creation.
+func SeedOrganizationFeatures(ctx context.Context, organizationId string) error {
+	return seedOrganizationFeatures(ctx, organizationId)
+}
+
 func seedOrganizationFeatures(ctx context.Context, organizationId string) error {
 	all := featurespg.AllFeatures()
 	functions := make([]func() error, 0, len(all))

@@ -1,24 +1,33 @@
 package transport
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/api_bucket"
 	accountspg "github.com/Johncode248/Rodzic-Chat/project/common/accounts"
 	featurespg "github.com/Johncode248/Rodzic-Chat/project/common/features"
 	"github.com/Johncode248/Rodzic-Chat/project/service/internal"
+	childhealthint "github.com/Johncode248/Rodzic-Chat/project/service/internal/childhealth"
+	todosint "github.com/Johncode248/Rodzic-Chat/project/service/internal/todos"
 	absencesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/absences"
 	accountsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/accounts"
+	admingt "github.com/Johncode248/Rodzic-Chat/project/service/transport/admin"
 	aichatgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/aichat"
+	announcementsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/announcements"
 	authgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/authorization"
+	avatarsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/avatars"
 	calendargt "github.com/Johncode248/Rodzic-Chat/project/service/transport/calendar"
 	caregiversgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/caregivers"
 	chatinvitesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/chatinvites"
 	chatsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/chats"
 	childeventsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/childevents"
+	childhealthgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/childhealth"
 	childrengt "github.com/Johncode248/Rodzic-Chat/project/service/transport/children"
+	coparentsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/coparents"
 	"github.com/Johncode248/Rodzic-Chat/project/service/transport/credentials"
 	dashboardgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/dashboard"
 	devicetokensgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/devicetokens"
@@ -27,6 +36,8 @@ import (
 	groupsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/groups"
 	groupteachersgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/groupteachers"
 	guardianclaimsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/guardianclaims"
+	helprequestsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/helprequests"
+	lessonplangt "github.com/Johncode248/Rodzic-Chat/project/service/transport/lessonplan"
 	mealsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/meals"
 	mediagt "github.com/Johncode248/Rodzic-Chat/project/service/transport/media"
 	nfzgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/nfz"
@@ -38,15 +49,21 @@ import (
 	paymentsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/payments"
 	placesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/places"
 	platformsettingsgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/platformsettings"
+	profilesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/profiles"
 	registrationlinksgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/registrationlinks"
+	shoppinggt "github.com/Johncode248/Rodzic-Chat/project/service/transport/shopping"
 	stripewebhookgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/stripewebhook"
 	teacherinvitesgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/teacherinvites"
+	todosgt "github.com/Johncode248/Rodzic-Chat/project/service/transport/todos"
 	"github.com/Johncode248/Rodzic-Chat/variables"
 	"github.com/gorilla/mux"
 	"github.com/stripe/stripe-go/v81"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
+
+// Keeps the admingt import alive while the Mount call in Start() is commented out.
+var _ = admingt.Mount
 
 func initTracer() {
 	tp := trace.NewTracerProvider()
@@ -101,25 +118,14 @@ func Start() {
 	public.HandleFunc("/auth/google/login", authgt.LoginGoogle).Methods("GET")
 	public.HandleFunc("/auth/google/register", authgt.RegisterGoogle).Methods("GET")
 
-	// Parent self-registration via a director-generated, group-scoped link
-	// (see project/common/registrationlinks) — unauthenticated by design,
-	// the token itself is the only "credential" needed to view/use it.
-	public.HandleFunc("/registration-links/{token}", registrationlinksgt.PublicInfo).Methods("GET")
-	public.HandleFunc("/registration-links/{token}/register", registrationlinksgt.PublicRegister).Methods("POST")
-
-	// Teacher self-registration via a director-generated invite link (see
-	// project/common/teacherinvites) — unauthenticated by design, same
-	// reasoning as the parent registration links above.
-	public.HandleFunc("/teacher-invites/{token}", teacherinvitesgt.PublicInfo).Methods("GET")
-	public.HandleFunc("/teacher-invites/{token}/register", teacherinvitesgt.PublicRegister).Methods("POST")
-
-	// One parent inviting a co-parent to manage the same children (see
-	// project/common/parentinvites) — peer-to-peer, no organization/
-	// director involved. /register is for someone with no account yet;
-	// the authenticated /accept (below, under /private) is for someone
-	// who already has one.
-	public.HandleFunc("/parent-invites/{token}", parentinvitesgt.PublicInfo).Methods("GET")
-	public.HandleFunc("/parent-invites/{token}/register", parentinvitesgt.PublicRegister).Methods("POST")
+	// registration-links, teacher-invites and parent-invites no longer have
+	// any public/anonymous route -- every one of the four invite/join
+	// systems (org parent invite, org teacher invite, co-parent invite,
+	// chat invite) now requires an already-authenticated caller and is
+	// redeemed by an 8-digit PIN instead of a token embedded in a public
+	// URL (see project/common/registrationlinks, teacherinvites,
+	// parentinvites, chatinvites, and their /private lookup/confirm/accept
+	// routes below). There is no more anonymous self-registration.
 
 	router.HandleFunc("/login/callback", authgt.GoogleCallbackLoginHandler)
 	router.HandleFunc("/register/callback", authgt.GoogleCallbackRegisterHandler)
@@ -134,6 +140,14 @@ func Start() {
 	// org, no JWT; gated by its own shared-secret check (see
 	// transport/platformsettings/helpers.go), so it's mounted under
 	// /public rather than /private on purpose.
+	// ---- LOCAL ADMIN MODE ("centrum dowodzenia") ------------------------------------------------
+	// Uncomment the next line ONLY on your own computer, and start the backend with ADMIN_MODE=1
+	// (see `make admin` / Rodzic-Chat-Admin/README.md). It exposes /admin/api/* with NO login and
+	// full CRUD over every table; it answers loopback (127.0.0.1) requests only. Never commit it
+	// uncommented, never enable it on a server.
+	//admingt.Mount(router)
+	// ---------------------------------------------------------------------------------------------
+
 	public.HandleFunc("/platform/settings", platformsettingsgt.Select).Methods("GET")
 	public.HandleFunc("/platform/settings", platformsettingsgt.Update).Methods("PATCH")
 
@@ -144,6 +158,14 @@ func Start() {
 	public.HandleFunc("/organizations/subscription-override", organizationsgt.SetSubscriptionOverride).Methods("PATCH")
 
 	private.Use(credentials.AuthMiddleware)
+
+	// PIN lookup/confirm/accept endpoints for the four invite/join systems
+	// (registration-invites, teacher-invites, parent-invites, chat-invites)
+	// -- an 8-digit PIN's keyspace is brute-forceable in a bounded number
+	// of guesses, so each caller's own account (not IP, since every one of
+	// these routes now requires auth) gets a request budget, same
+	// reasoning as loginRateLimit/passwordResetRateLimit above.
+	pinRateLimit := credentials.RateLimitByAccountMiddleware(5, 15*time.Minute)
 
 	private.HandleFunc("/credentials", credentials.Update).Methods("POST")
 
@@ -171,6 +193,9 @@ func Start() {
 	// gate is used (per product decision) -- the only asymmetry is
 	// provisioning: only a Director may invite a new CoDirector, checked
 	// inside teacherinvitesgt.Create itself.
+	directorOr := func(p accountspg.Permission) func(http.Handler) http.Handler {
+		return credentials.RequireAccountTypeOrPermission(p, accountspg.AccountTypeDirector.Ordinal(), accountspg.AccountTypeCoDirector.Ordinal())
+	}
 	organizationsDirectorOnly := credentials.RequireAccountType(accountspg.AccountTypeDirector.Ordinal(), accountspg.AccountTypeCoDirector.Ordinal())
 
 	// Roster: staff-only "who is on my team" view, org-scoped, optional
@@ -190,6 +215,7 @@ func Start() {
 	// capabilities (currently: managing payments) on a teacher account in
 	// their own org, without promoting them to co-director.
 	private.Handle("/accounts/staff/permissions", organizationsDirectorOnly(http.HandlerFunc(accountsgt.UpdateStaffPermissions))).Methods("PATCH")
+	private.Handle("/accounts/staff/permissions/catalog", organizationsDirectorOnly(http.HandlerFunc(accountsgt.StaffPermissionCatalog))).Methods("GET")
 
 	// Director dashboard activity feed (see project/common/dashboard).
 	private.Handle("/dashboard/feed", staffOnlyRoster(http.HandlerFunc(dashboardgt.Feed))).Methods("GET")
@@ -201,23 +227,29 @@ func Start() {
 	// Guardian claims: review queue for the "second parent matched an
 	// existing child by name but the birth date didn't agree" security
 	// check (see project/common/guardianclaims) -- director-only.
-	private.Handle("/guardian-claims", organizationsDirectorOnly(http.HandlerFunc(guardianclaimsgt.Select))).Methods("GET")
-	private.Handle("/guardian-claims/resolve", organizationsDirectorOnly(http.HandlerFunc(guardianclaimsgt.Resolve))).Methods("POST")
+	private.Handle("/guardian-claims", directorOr(accountspg.PermissionResolveGuardianClaims)(http.HandlerFunc(guardianclaimsgt.Select))).Methods("GET")
+	private.Handle("/guardian-claims/resolve", directorOr(accountspg.PermissionResolveGuardianClaims)(http.HandlerFunc(guardianclaimsgt.Resolve))).Methods("POST")
 
-	// Registration links: how a director lets parents in one group
-	// self-register (see project/common/registrationlinks). Director-only
-	// to create/list/revoke; the public GET/POST counterparts are
-	// registered above under /public.
-	private.Handle("/registration-links", organizationsDirectorOnly(http.HandlerFunc(registrationlinksgt.Create))).Methods("POST")
-	private.Handle("/registration-links", organizationsDirectorOnly(http.HandlerFunc(registrationlinksgt.Select))).Methods("GET")
-	private.Handle("/registration-links", organizationsDirectorOnly(http.HandlerFunc(registrationlinksgt.Delete))).Methods("DELETE")
+	// Registration invites: how a director lets an already-authenticated
+	// parent in one group attach to a child using an 8-digit PIN (see
+	// project/common/registrationlinks) -- director-only to create/list/
+	// revoke; lookup/confirm are open to any authenticated parent (rate
+	// limited, since a PIN is guessable in a bounded number of attempts).
+	private.Handle("/registration-invites", directorOr(accountspg.PermissionInviteParents)(http.HandlerFunc(registrationlinksgt.Create))).Methods("POST")
+	private.Handle("/registration-invites", directorOr(accountspg.PermissionInviteParents)(http.HandlerFunc(registrationlinksgt.Select))).Methods("GET")
+	private.Handle("/registration-invites", directorOr(accountspg.PermissionInviteParents)(http.HandlerFunc(registrationlinksgt.Delete))).Methods("DELETE")
+	private.Handle("/registration-invites/lookup", pinRateLimit(http.HandlerFunc(registrationlinksgt.Lookup))).Methods("POST")
+	private.Handle("/registration-invites/confirm", pinRateLimit(http.HandlerFunc(registrationlinksgt.Confirm))).Methods("POST")
 
-	// Teacher invites: same shape as registration links but for a single
-	// teacher (see project/common/teacherinvites) -- director-only to
-	// create/list/revoke, public GET/POST counterparts registered above.
+	// Teacher invites: same shape as registration invites but for a single
+	// teacher/co-director (see project/common/teacherinvites) --
+	// director-only to create/list/revoke; lookup/confirm are open to any
+	// authenticated caller (rate limited).
 	private.Handle("/teacher-invites", organizationsDirectorOnly(http.HandlerFunc(teacherinvitesgt.Create))).Methods("POST")
 	private.Handle("/teacher-invites", organizationsDirectorOnly(http.HandlerFunc(teacherinvitesgt.Select))).Methods("GET")
 	private.Handle("/teacher-invites", organizationsDirectorOnly(http.HandlerFunc(teacherinvitesgt.Delete))).Methods("DELETE")
+	private.Handle("/teacher-invites/lookup", pinRateLimit(http.HandlerFunc(teacherinvitesgt.Lookup))).Methods("POST")
+	private.Handle("/teacher-invites/confirm", pinRateLimit(http.HandlerFunc(teacherinvitesgt.Confirm))).Methods("POST")
 
 	private.Handle("/organizations", organizationsDirectorOnly(http.HandlerFunc(organizationsgt.Create))).Methods("POST")
 	private.HandleFunc("/organizations", organizationsgt.Select).Methods("GET")
@@ -274,11 +306,61 @@ func Start() {
 	// events) -- see project/service/internal/calendar.
 	private.HandleFunc("/calendar", calendargt.Get).Methods("GET")
 
-	// One parent inviting a co-parent to manage the same children -- the
-	// authenticated "I already have an account" accept path; see
-	// /public/parent-invites/{token}/register above for the no-account path.
+	// One parent inviting a co-parent to manage the same children -- both
+	// inviter and accepter must already be authenticated (there is no more
+	// no-account-yet public path).
 	private.HandleFunc("/parent-invites", parentinvitesgt.Create).Methods("POST")
-	private.HandleFunc("/parent-invites/{token}/accept", parentinvitesgt.Accept).Methods("POST")
+	private.Handle("/parent-invites/accept", pinRateLimit(http.HandlerFunc(parentinvitesgt.Accept))).Methods("POST")
+	// The other parent(s) sharing my children: list, and disconnect (unlink from the shared children).
+	// Announcements: developer-authored notes shown in the parent-facing "Nowości" tab.
+	private.HandleFunc("/announcements", announcementsgt.List).Methods("GET")
+
+	// Todo: own tasks + automatic to-dos (unpaid payments, event sign-ups, polls/consents) merged.
+	private.HandleFunc("/children/health", childhealthgt.Overview).Methods("GET")
+	private.HandleFunc("/children/health/profile", childhealthgt.SaveProfile).Methods("PUT")
+	private.HandleFunc("/children/health/allergies", childhealthgt.AddAllergy).Methods("POST")
+	private.HandleFunc("/children/health/allergies", childhealthgt.DeleteAllergy).Methods("DELETE")
+	private.HandleFunc("/children/health/doctors", childhealthgt.AddDoctor).Methods("POST")
+	private.HandleFunc("/children/health/doctors", childhealthgt.DeleteDoctor).Methods("DELETE")
+	private.HandleFunc("/children/health/measurements", childhealthgt.AddMeasurement).Methods("POST")
+	private.HandleFunc("/children/health/measurements", childhealthgt.DeleteMeasurement).Methods("DELETE")
+	private.HandleFunc("/children/illness", childhealthgt.Illness).Methods("GET")
+	private.HandleFunc("/children/illness/episode", childhealthgt.Episode).Methods("GET")
+	private.HandleFunc("/children/illness/episodes", childhealthgt.StartEpisode).Methods("POST")
+	private.HandleFunc("/children/illness/episodes/end", childhealthgt.EndEpisode).Methods("POST")
+	private.HandleFunc("/children/illness/entries", childhealthgt.AddEntry).Methods("POST")
+	private.HandleFunc("/children/illness/entries", childhealthgt.DeleteEntry).Methods("DELETE")
+	private.HandleFunc("/children/illness/medications", childhealthgt.AddMedication).Methods("POST")
+	private.HandleFunc("/children/illness/medications/stop", childhealthgt.StopMedication).Methods("POST")
+	private.HandleFunc("/children/illness/medications/adhoc", childhealthgt.AdHocDose).Methods("POST")
+	private.HandleFunc("/children/illness/doses/give", childhealthgt.GiveDose).Methods("POST")
+	private.HandleFunc("/children/illness/doses/skip", childhealthgt.SkipDose).Methods("POST")
+	private.HandleFunc("/shopping/lists/copy", shoppinggt.CopyList).Methods("POST")
+	private.HandleFunc("/shopping/lists", shoppinggt.Lists).Methods("GET")
+	private.HandleFunc("/shopping/lists", shoppinggt.CreateList).Methods("POST")
+	private.HandleFunc("/shopping/lists", shoppinggt.UpdateList).Methods("PATCH")
+	private.HandleFunc("/shopping/lists", shoppinggt.DeleteList).Methods("DELETE")
+	private.HandleFunc("/shopping/list", shoppinggt.Detail).Methods("GET")
+	private.HandleFunc("/shopping/items", shoppinggt.AddItems).Methods("POST")
+	private.HandleFunc("/shopping/items", shoppinggt.UpdateItem).Methods("PATCH")
+	private.HandleFunc("/shopping/items", shoppinggt.DeleteItem).Methods("DELETE")
+	private.HandleFunc("/shopping/history", shoppinggt.History).Methods("GET")
+	private.HandleFunc("/todos/snooze", todosgt.Snooze).Methods("POST")
+	private.HandleFunc("/todos/snooze", todosgt.Unsnooze).Methods("DELETE")
+	private.HandleFunc("/todos/prefs", todosgt.GetPrefs).Methods("GET")
+	private.HandleFunc("/todos/prefs", todosgt.SetPrefs).Methods("PUT")
+	private.HandleFunc("/todos", todosgt.List).Methods("GET")
+	private.HandleFunc("/todos", todosgt.Create).Methods("POST")
+	private.HandleFunc("/todos", todosgt.Update).Methods("PATCH")
+	private.HandleFunc("/todos", todosgt.Delete).Methods("DELETE")
+	private.HandleFunc("/accounts/avatar", avatarsgt.Get).Methods("GET")
+	private.HandleFunc("/accounts/avatar", avatarsgt.Put).Methods("PUT")
+	private.HandleFunc("/accounts/avatar", avatarsgt.Delete).Methods("DELETE")
+	private.HandleFunc("/profiles", profilesgt.List).Methods("GET")
+	private.HandleFunc("/profiles", profilesgt.Add).Methods("POST")
+	private.HandleFunc("/profiles/switch", profilesgt.Switch).Methods("POST")
+	private.HandleFunc("/co-parents", coparentsgt.List).Methods("GET")
+	private.HandleFunc("/co-parents", coparentsgt.Disconnect).Methods("DELETE")
 
 	// Chat invites (project/common/chatinvites): a parent generates a
 	// link/code for another parent to start a private 1:1 chat with no
@@ -288,7 +370,8 @@ func Start() {
 	// flag against).
 	parentOnly := credentials.RequireAccountType(accountspg.AccountTypeParent.Ordinal())
 	private.Handle("/chat-invites", parentOnly(http.HandlerFunc(chatinvitesgt.Create))).Methods("POST")
-	private.Handle("/chat-invites/{token}/accept", parentOnly(http.HandlerFunc(chatinvitesgt.Accept))).Methods("POST")
+	private.Handle("/chat-invites/lookup", parentOnly(pinRateLimit(http.HandlerFunc(chatinvitesgt.Lookup)))).Methods("POST")
+	private.Handle("/chat-invites/accept", parentOnly(pinRateLimit(http.HandlerFunc(chatinvitesgt.Accept)))).Methods("POST")
 	private.Handle("/chat-invites/for-channel", parentOnly(http.HandlerFunc(chatinvitesgt.CreateForChannel))).Methods("POST")
 
 	// Parent AI plan (Free/Pro/Max) + usage -- see
@@ -304,6 +387,13 @@ func Start() {
 	// (Claude). Mobile-only client-side.
 	private.HandleFunc("/ai-chat/messages", aichatgt.Send).Methods("POST")
 
+	// "Dodaj plan lekcji" -- a parent photographs a paper plan zajęć and this reads it into a
+	// structured weekly schedule for them to confirm/edit before saving (see
+	// project/service/internal/aichat.ExtractScheduleFromImage). Separate from the assistant chat
+	// above: not plan/limit-gated (no usage tracking exists for either yet, see that endpoint's
+	// own doc comment), just requires being logged in.
+	private.HandleFunc("/lesson-plan/extract", lessonplangt.Extract).Methods("POST")
+
 	// Parent-recommended places -- see project/common/places.
 	private.HandleFunc("/places/categories", placesgt.Categories).Methods("GET")
 	private.HandleFunc("/places/search", placesgt.Search).Methods("GET")
@@ -315,10 +405,30 @@ func Start() {
 	// distinct from /places above: each row is owned by the account that
 	// provides the service (self-listed), not an arbitrary third-party
 	// place anyone can add.
+	// "Szukam / Polecam" board: people ask for recommendations, others answer.
+	private.HandleFunc("/requests/categories", helprequestsgt.Categories).Methods("GET")
+	private.HandleFunc("/requests", helprequestsgt.List).Methods("GET")
+	private.HandleFunc("/requests", helprequestsgt.Create).Methods("POST")
+	private.HandleFunc("/requests", helprequestsgt.Delete).Methods("DELETE")
+	private.HandleFunc("/requests/similar", helprequestsgt.Similar).Methods("GET")
+	private.HandleFunc("/requests/best", helprequestsgt.Best).Methods("POST")
+	private.HandleFunc("/requests/photos", helprequestsgt.PhotoPut).Methods("POST")
+	private.HandleFunc("/requests/photos", helprequestsgt.PhotoGet).Methods("GET")
+	private.HandleFunc("/requests/follows", helprequestsgt.Follows).Methods("GET")
+	private.HandleFunc("/requests/follows", helprequestsgt.FollowSet).Methods("POST")
+	private.HandleFunc("/requests/activity", helprequestsgt.Activity).Methods("GET")
+	private.HandleFunc("/requests/stats", helprequestsgt.Stats).Methods("GET")
+	private.HandleFunc("/requests/detail", helprequestsgt.Detail).Methods("GET")
+	private.HandleFunc("/requests/close", helprequestsgt.Close).Methods("POST")
+	private.HandleFunc("/requests/replies", helprequestsgt.Reply).Methods("POST")
+	private.HandleFunc("/requests/replies", helprequestsgt.DeleteReply).Methods("DELETE")
+	private.HandleFunc("/requests/replies/vote", helprequestsgt.Vote).Methods("POST")
+
 	private.HandleFunc("/caregivers", caregiversgt.List).Methods("GET")
 	private.HandleFunc("/caregivers", caregiversgt.Upsert).Methods("POST")
 	private.HandleFunc("/caregivers", caregiversgt.Delete).Methods("DELETE")
 	private.HandleFunc("/caregivers/mine", caregiversgt.GetMine).Methods("GET")
+	private.HandleFunc("/caregivers/my", caregiversgt.ListMine).Methods("GET")
 	private.HandleFunc("/caregivers/detail", caregiversgt.GetDetail).Methods("GET")
 	private.HandleFunc("/caregivers/recommendations", caregiversgt.Recommend).Methods("POST")
 	private.HandleFunc("/caregivers/recommendations", caregiversgt.Unrecommend).Methods("DELETE")
@@ -328,17 +438,11 @@ func Start() {
 	// behind our own auth like every other /private route regardless.
 	private.HandleFunc("/nfz/benefits", nfzgt.FindBenefit).Methods("GET")
 	private.HandleFunc("/nfz/queues", nfzgt.SearchQueues).Methods("GET")
+	private.HandleFunc("/nfz/saved", nfzgt.SavedList).Methods("GET")
+	private.HandleFunc("/nfz/saved", nfzgt.SavedAdd).Methods("POST")
+	private.HandleFunc("/nfz/saved", nfzgt.SavedRemove).Methods("DELETE")
+	private.HandleFunc("/nfz/specialties", nfzgt.Specialties).Methods("GET")
 	private.HandleFunc("/nfz/province", nfzgt.ProvinceForLocation).Methods("GET")
-
-	// RSPO (Rejestr Szkół i Placówek Oświatowych) integration -- see project/common/rspo.
-	// DELIBERATELY NOT ROUTED: rspo.Search (project/service/internal/rspo/client.go) calls
-	// https://rspo.gov.pl/api/Institution, the undocumented internal endpoint the public
-	// rspo.gov.pl search page's own JavaScript uses -- not the Ministry of Education's actual
-	// sanctioned integration API (https://api.rspo.gov.pl), which requires a written "wniosek"
-	// to rspo@cie.gov.pl and issued credentials before any programmatic use. Re-enable this
-	// route (and the matching iOS hub section, see SearchHubView's doc comment) once that
-	// request is approved and the client is pointed at the real credentialed endpoint.
-	// private.HandleFunc("/rspo/search", rspogt.Search).Methods("GET") -- import commented out too, see above
 
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Create))).Methods("POST")
 	private.Handle("/groups", staffOnly(http.HandlerFunc(groupsgt.Select))).Methods("GET")
@@ -425,6 +529,12 @@ func Start() {
 	private.HandleFunc("/chats/parent-channels/messages", chatsgt.CreateParentChannelMessage).Methods("POST")
 	private.HandleFunc("/chats/parent-channels/members", chatsgt.SelectParentChannelMembers).Methods("GET")
 	private.HandleFunc("/chats/parent-channels/members", chatsgt.RemoveParentChannelMember).Methods("DELETE")
+	private.HandleFunc("/chats/parent-channels/members", chatsgt.SetParentChannelMemberRole).Methods("PATCH")
+	private.HandleFunc("/chats/parent-channels/bans", chatsgt.BanParentChannelMember).Methods("POST")
+	private.HandleFunc("/chats/parent-channels/bans", chatsgt.UnbanParentChannelMember).Methods("DELETE")
+	private.HandleFunc("/chats/parent-channels/messages", chatsgt.DeleteParentChannelMessage).Methods("DELETE")
+	// Static catalog of chat roles/permissions with Polish descriptions (one source of truth).
+	private.HandleFunc("/chats/roles", chatsgt.ChannelRoles).Methods("GET")
 	private.HandleFunc("/chats/parent-channels/rename", chatsgt.RenameParentChannel).Methods("PATCH")
 	private.HandleFunc("/chats/parent-channels/messages/pin", chatsgt.PinParentChannelMessage).Methods("POST")
 	private.HandleFunc("/chats/parent-channels/messages/reads", chatsgt.MarkParentChannelMessageRead).Methods("POST")
@@ -483,8 +593,16 @@ func Start() {
 	handler := MaxSizeMiddleware(router)
 	handler = credentials.CorsMiddleware(handler)
 
-	log.Println("Starting server at :8080")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	addr := ":8080"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
+	log.Println("Starting server at " + addr)
+	// Reminders and the opt-in digests of "Do zrobienia" (see todos.RunScheduler).
+	go todosint.RunScheduler(context.Background())
+	// Medication reminders of the illness diary.
+	go childhealthint.RunScheduler(context.Background())
+	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
 func MaxSizeMiddleware(next http.Handler) http.Handler {

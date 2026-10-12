@@ -15,7 +15,24 @@ type Permission int64
 
 const (
 	PermissionManagePayments Permission = 1 << iota
+	PermissionInviteParents
+	PermissionResolveGuardianClaims
 )
+
+// PermissionInfo describes one grantable staff permission for the in-app explanation screen.
+type PermissionInfo struct {
+	Bit         Permission `json:"bit"`
+	Key         string     `json:"key"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+}
+
+// PermissionCatalog is the single source of truth for what each grantable permission means.
+var PermissionCatalog = []PermissionInfo{
+	{PermissionManagePayments, "manage_payments", "Płatności", "Tworzenie, edytowanie i usuwanie płatności (czesne, wycieczki, obiady) oraz rozliczanie wpłat."},
+	{PermissionInviteParents, "invite_parents", "Zapraszanie rodziców", "Tworzenie i usuwanie linków rejestracyjnych, którymi rodzice dołączają do placówki."},
+	{PermissionResolveGuardianClaims, "resolve_guardian_claims", "Potwierdzanie opiekunów", "Zatwierdzanie lub odrzucanie zgłoszeń rodziców, którzy twierdzą, że są opiekunem danego dziecka."},
+}
 
 // Has reports whether bit is set in the receiver bitmask.
 func (p Permission) Has(bit Permission) bool {

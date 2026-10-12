@@ -17,14 +17,14 @@ var ErrInviteNotUsable = errors.New("this invite has expired or was already used
 var ErrCannotAcceptOwnInvite = errors.New("you cannot accept your own invite")
 
 // Accept adds accepterAccountId as a ChannelMember of the inviter's chat
-// channel -- the path for a co-parent who already has a Rodzic Chat
+// channel -- both inviter and accepter must already have a Rodzic Chat
 // account. Single-use: consuming it marks ConsumedByAccountId so the same
-// token can't be redeemed twice.
-func Accept(ctx context.Context, token string, accepterAccountId string) (res chatinvitespg.AcceptResponse, err error) {
-	ctx = logger.Enter(ctx, "chatinvites.Accept", token, accepterAccountId)
+// PIN can't be redeemed twice.
+func Accept(ctx context.Context, pin string, accepterAccountId string) (res chatinvitespg.AcceptResponse, err error) {
+	ctx = logger.Enter(ctx, "chatinvites.Accept", "<redacted>", accepterAccountId)
 	defer logger.Exit(ctx, "chatinvites.Accept", &res, &err)
 
-	invite, err := getByToken(ctx, token)
+	invite, err := getByPin(ctx, pin)
 	if err != nil {
 		return res, err
 	}

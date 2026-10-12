@@ -34,17 +34,11 @@ func SelectParentChannelMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isMember, err := chats.IsChannelMember(ctx, channelId, accountId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !isMember {
-		http.Error(w, "caller is not a member of this channel", http.StatusForbidden)
+	if !requireMember(w, r, channelId, accountId) {
 		return
 	}
 
-	res, err = chats.ListMembers(ctx, channelId)
+	res, err = chats.ListMembers(ctx, channelId, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -78,7 +72,7 @@ func RemoveParentChannelMember(w http.ResponseWriter, r *http.Request) {
 
 	if err = chats.RemoveMember(ctx, channelId, targetAccountId, callerAccountId); err != nil {
 		status := http.StatusInternalServerError
-		if err == chats.ErrNotChannelAdmin || err == chats.ErrCannotRemoveAdmin {
+		if err == chats.ErrNotChannelAdmin || err == chats.ErrCannotRemoveAdmin || err == chats.ErrNoPermission || err == chats.ErrCannotModerateTarget {
 			status = http.StatusForbidden
 		}
 		http.Error(w, err.Error(), status)

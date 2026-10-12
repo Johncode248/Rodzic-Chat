@@ -37,13 +37,7 @@ func SelectParentChannelMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isMember, err := chats.IsChannelMember(ctx, channelId, accountId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !isMember {
-		http.Error(w, "caller is not a member of this channel", http.StatusForbidden)
+	if !requireMember(w, r, channelId, accountId) {
 		return
 	}
 

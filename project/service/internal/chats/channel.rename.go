@@ -26,11 +26,11 @@ func RenameChannel(ctx context.Context, channelId, callerAccountId, name string)
 		return chatspg.Channel{}, ErrChannelNameTooLong
 	}
 
-	isAdmin, err := IsChannelAdmin(ctx, channelId, callerAccountId)
+	canRename, err := HasChannelPermission(ctx, channelId, callerAccountId, chatspg.PermRename)
 	if err != nil {
 		return chatspg.Channel{}, err
 	}
-	if !isAdmin {
+	if !canRename {
 		return chatspg.Channel{}, ErrNotChannelAdmin
 	}
 

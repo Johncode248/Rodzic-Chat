@@ -16,6 +16,8 @@ const tokenCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345
 // into a banking app's transfer title.
 const paymentReferenceCharset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
+const digitCharset = "0123456789"
+
 func randomString(charset string, length int) string {
 	var sb strings.Builder
 	for i := 0; i < length; i++ {
@@ -51,6 +53,18 @@ func GeneratePassword() string {
 // brute-forceable before a link's own expiry.
 func GenerateToken() string {
 	return randomString(tokenCharset, 32)
+}
+
+// GeneratePin returns an 8-digit numeric PIN (each digit drawn
+// independently via crypto/rand, zero-padded, e.g. "00841273" is a valid
+// output) suitable for an authenticated user to type in by hand to join an
+// org/co-parent/chat invite -- unlike GenerateToken, this is meant to be
+// short enough to read off a screen and key in manually, not embedded in a
+// URL. Callers are responsible for hashing it before storage (see
+// library/pinhash) and for retrying generation on the rare uniqueIndex
+// collision.
+func GeneratePin() string {
+	return randomString(digitCharset, 8)
 }
 
 // GeneratePaymentReference returns a short, unambiguous code (e.g.

@@ -39,8 +39,12 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Note: organizationId may legitimately be "" here (a parent with no
+	// organization yet, e.g. one only using an org-less chat-invite
+	// channel) -- do not gate on it being non-empty, only use it below to
+	// authorize posting into an org-scoped channel.
 	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
-	if err != nil || organizationId == "" {
+	if err != nil {
 		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
 		return
 	}
@@ -67,9 +71,31 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if len(channelResult.Channels) == 0 || channelResult.Channels[0].OrganizationId != organizationId {
+	if len(channelResult.Channels) == 0 {
 		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
 		return
+	}
+
+	// Org-scoped channel: same organization match as before. Org-less
+	// channel (e.g. a chat-invite-created Direct channel, OrganizationId
+	// == ""): there's no organization to match against, so membership in
+	// the channel itself is the access control -- see chatinvites.Accept,
+	// which is the only way to end up a member of one of these.
+	if channelResult.Channels[0].OrganizationId != "" {
+		if channelResult.Channels[0].OrganizationId != organizationId {
+			http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
+	} else {
+		isMember, err := chats.IsChannelMember(ctx, request.ChannelId, accountId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
+			return
+		}
 	}
 
 	if channelResult.Channels[0].Type == chatspg.ChannelTypeAnnouncement {
@@ -85,8 +111,13 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = chats.CreateMessage(ctx, chatspg.MessageCreateArgument{
-		ChannelId:      request.ChannelId,
-		OrganizationId: organizationId,
+		ChannelId: request.ChannelId,
+		// The message's own organization is the channel's, not the
+		// caller's -- an org-having parent posting into an org-less
+		// channel they're a member of must still produce an org-less
+		// (OrganizationId == "") message, matching
+		// CreateParentChannelMessage.
+		OrganizationId: channelResult.Channels[0].OrganizationId,
 		SenderId:       accountId,
 		Type:           chatspg.MessageTypeText,
 		Content:        request.Content,

@@ -28,39 +28,36 @@ func SelectReactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
-	if err != nil || organizationId == "" {
-		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
-		return
-	}
-
-	inOrg, err := messageInOrganization(ctx, messageId, organizationId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !inOrg {
-		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
-		return
-	}
-
 	accountId, err := credentials.GetUserIdFromContext(ctx)
 	if err != nil || accountId == "" {
 		http.Error(w, "Error getting accountId from context", http.StatusForbidden)
 		return
 	}
+
+	// Note: organizationId may legitimately be "" here -- see
+	// messageAccessible.
+	organizationId, err := credentials.GetOrganizationIdFromContext(ctx)
+	if err != nil {
+		http.Error(w, "Error getting organizationId from context", http.StatusForbidden)
+		return
+	}
+
 	accountType, err := credentials.GetAccountTypeFromContext(ctx)
 	if err != nil {
 		http.Error(w, "Error getting accountType from context", http.StatusForbidden)
 		return
 	}
-	channel, found, err := channelForMessage(ctx, messageId)
+	channel, found, allowed, err := messageAccessible(ctx, messageId, organizationId, accountId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !found {
 		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+	if !allowed {
+		http.Error(w, chats.ErrChannelNotInOrganization.Error(), http.StatusForbidden)
 		return
 	}
 	if err = chats.CheckReadPermission(ctx, channel, accountId, accountType); err != nil {

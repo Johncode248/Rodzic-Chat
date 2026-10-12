@@ -63,12 +63,14 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err = teacherinvites.Create(ctx, teacherinvitespg.CreateArgument{
-		OrganizationId: organizationId,
-		GroupId:        request.GroupId,
-		AccountType:    request.AccountType,
-		Name:           request.Name,
-		Email:          request.Email,
-		CreatedBy:      accountId,
+		OrganizationId:    organizationId,
+		GroupId:           request.GroupId,
+		AccountType:       request.AccountType,
+		Name:              request.Name,
+		Email:             request.Email,
+		PublicDescription: request.PublicDescription,
+		InternalNote:      request.InternalNote,
+		CreatedBy:         accountId,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

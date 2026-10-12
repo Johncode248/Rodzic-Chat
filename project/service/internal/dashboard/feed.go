@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"github.com/Johncode248/Rodzic-Chat/project/common/modules"
 	"sort"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
@@ -22,6 +23,9 @@ import (
 // dashboardpg.FeedItem's doc comment for why this reads at request time
 // instead of maintaining a dedicated event log.
 func Feed(ctx context.Context, organizationId string, limit int) (res dashboardpg.FeedResponse, err error) {
+	if !modules.Organizations {
+		return dashboardpg.FeedResponse{Items: []dashboardpg.FeedItem{}}, nil
+	}
 	perSourceLimit := limit
 	if perSourceLimit <= 0 {
 		perSourceLimit = 20

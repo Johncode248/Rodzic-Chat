@@ -29,7 +29,7 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, channel, err := chatinvites.Create(ctx, accountId)
+	invite, channel, plaintextPin, err := chatinvites.Create(ctx, accountId)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err == chatinvites.ErrChannelLimitReached {
@@ -40,7 +40,7 @@ func Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = chatinvitespg.CreateResponse{
-		Token:     invite.Token,
+		Pin:       plaintextPin,
 		ExpiresAt: invite.ExpiresAt.Format("2006-01-02"),
 		Channel:   channel,
 	}

@@ -18,7 +18,9 @@ var errPermissionTargetNotTeacher = errors.New("permissions can only be granted 
 // A nil field leaves that permission untouched; new grantable permissions
 // get their own field here as they're added.
 type UpdateStaffPermissionsRequest struct {
-	CanManagePayments *bool `json:"can_manage_payments,omitempty"`
+	CanManagePayments        *bool `json:"can_manage_payments,omitempty"`
+	CanInviteParents         *bool `json:"can_invite_parents,omitempty"`
+	CanResolveGuardianClaims *bool `json:"can_resolve_guardian_claims,omitempty"`
 }
 
 // UpdateStaffPermissions lets a director/co-director grant or revoke extra
@@ -84,6 +86,13 @@ func UpdateStaffPermissions(w http.ResponseWriter, r *http.Request) {
 		newPermissions = newPermissions.Set(accountspg.PermissionManagePayments, *request.CanManagePayments)
 	}
 
+	if request.CanInviteParents != nil {
+		newPermissions = newPermissions.Set(accountspg.PermissionInviteParents, *request.CanInviteParents)
+	}
+	if request.CanResolveGuardianClaims != nil {
+		newPermissions = newPermissions.Set(accountspg.PermissionResolveGuardianClaims, *request.CanResolveGuardianClaims)
+	}
+
 	res, err = accounts.Update(ctx, accountspg.UpdateArgument{
 		Query: databasepg.Query{
 			Groups: []databasepg.Group{
@@ -98,4 +107,9 @@ func UpdateStaffPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(res)
+}
+
+// StaffPermissionCatalog lists every grantable permission with its explanation (GET, any staff).
+func StaffPermissionCatalog(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(map[string]any{"permissions": accountspg.PermissionCatalog})
 }

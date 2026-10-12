@@ -27,6 +27,9 @@ func Recommend(ctx context.Context, caregiverId, accountId, comment string) (res
 	if caregiver.AccountId == accountId {
 		return res, ErrCannotRecommendSelf
 	}
+	if caregiver.ReviewStatus == caregiverspg.ReviewStatusPending || caregiver.ReviewStatus == caregiverspg.ReviewStatusRejected {
+		return res, ErrNotFound
+	}
 
 	existing, err := gormdb.Select[caregiverspg.CaregiverRecommendation](ctx, databasepg.Query{
 		Limit: 1,

@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"github.com/Johncode248/Rodzic-Chat/project/common/modules"
 	"sort"
 	"time"
 
@@ -30,6 +31,9 @@ import (
 func MonthlySummary(ctx context.Context, accountId string, year, month int) (res dashboardpg.MonthlySummaryResponse, err error) {
 	res.Year = year
 	res.Month = month
+	if !modules.Organizations {
+		return res, nil // payments, school events, polls and consents exist only with the placówka module
+	}
 
 	monthStart := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 	monthEnd := monthStart.AddDate(0, 1, 0)
@@ -290,6 +294,10 @@ func addPendingPolls(ctx context.Context, accountId string, pollMessageIds []str
 		if !ok || votedPollIds[poll.Id] {
 			continue
 		}
+		// A closed poll can no longer be answered, so it is not something "to do".
+		if poll.ClosesAt != nil && poll.ClosesAt.Before(time.Now()) {
+			continue
+		}
 		res.TodoConsents = append(res.TodoConsents, dashboardpg.MonthlySummaryTodoConsent{
 			MessageId: messageId, ChannelId: messageById[messageId].ChannelId, Content: poll.Question, Kind: "poll",
 		})
@@ -355,4 +363,30 @@ func memberChannelIds(ctx context.Context, accountId string) ([]string, error) {
 
 func inRange(t *time.Time, start, end time.Time) bool {
 	return t != nil && !t.Before(start) && t.Before(end)
+}
+
+// Outstanding returns everything a parent still has to act on, regardless of month: unpaid payments
+// (overdue ones included), event sign-ups whose deadline hasn't passed, and polls/consents (of the
+// last 120 days) not answered yet. It reuses the monthly digest's own queries with a wide window,
+// so the Todo screen and the dashboard card can never disagree about what is outstanding.
+func Outstanding(ctx context.Context, accountId string) (res dashboardpg.MonthlySummaryResponse, err error) {
+	if !modules.Organizations {
+		return res, nil
+	}
+	now := time.Now()
+	childIds, err := childIdsForParent(ctx, accountId)
+	if err != nil {
+		return res, err
+	}
+	far := now.AddDate(20, 0, 0)
+	if err = addPayments(ctx, accountId, now.AddDate(-20, 0, 0), far, &res); err != nil {
+		return res, err
+	}
+	if err = addEvents(ctx, accountId, childIds, now, far, &res); err != nil {
+		return res, err
+	}
+	if err = addPollsAndConsents(ctx, accountId, now.AddDate(0, 0, -120), far, &res); err != nil {
+		return res, err
+	}
+	return res, nil
 }

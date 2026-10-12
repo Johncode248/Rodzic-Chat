@@ -3,6 +3,8 @@ package caregivers
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
@@ -83,6 +85,10 @@ func GetDetail(ctx context.Context, id string, callerAccountId string) (res care
 	if caregiver == nil {
 		return res, ErrNotFound
 	}
+	// Pending / rejected profiles are visible to their owner only.
+	if caregiver.AccountId != callerAccountId && caregiver.ReviewStatus != caregiverspg.ReviewStatusApproved && caregiver.ReviewStatus != caregiverspg.ReviewStatusUnknown {
+		return res, ErrNotFound
+	}
 
 	count, err := recommendationCount(ctx, id)
 	if err != nil {
@@ -106,10 +112,45 @@ func GetDetail(ctx context.Context, id string, callerAccountId string) (res care
 		recommended = len(recs) > 0
 	}
 
+	recommenders, _ := listRecommenders(ctx, id)
+
 	return caregiverspg.Detail{
+		Recommenders:        recommenders,
 		Caregiver:           *caregiver,
 		RecommendationCount: count,
 		RecommendedByMe:     recommended,
 		IsMine:              caregiver.AccountId == callerAccountId,
 	}, nil
+}
+
+// listRecommenders returns the latest 30 endorsements with the endorser's name.
+func listRecommenders(ctx context.Context, caregiverId string) ([]caregiverspg.Recommender, error) {
+	type row struct {
+		Name       string
+		Comment    string
+		CreateTime time.Time
+	}
+	rows, err := gormdb.CustomSelect[row](ctx, `select a.name as name, r.comment as comment, r.create_time as create_time
+ from caregiver_recommendations r join accounts a on a.id = r.account_id
+ where r.caregiver_id = ? order by r.create_time desc limit 30`, caregiverId)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]caregiverspg.Recommender, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, caregiverspg.Recommender{Name: firstName(r.Name), Comment: r.Comment, CreateTime: r.CreateTime})
+	}
+	return out, nil
+}
+
+// firstName shows "Anna K." style names: first name plus the initial of the rest.
+func firstName(full string) string {
+	parts := strings.Fields(full)
+	switch len(parts) {
+	case 0:
+		return "Rodzic"
+	case 1:
+		return parts[0]
+	}
+	return parts[0] + " " + string([]rune(parts[len(parts)-1])[:1]) + "."
 }

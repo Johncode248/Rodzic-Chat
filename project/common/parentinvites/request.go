@@ -1,26 +1,15 @@
 package parentinvitespg
 
 type CreateResponse struct {
-	Token     string `json:"token,omitempty"`
+	// Pin is the plaintext 8-digit PIN -- returned exactly once, here.
+	Pin       string `json:"pin,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
 }
 
-// PublicInfoResponse never errors on an invalid/expired/used token --
-// Usable=false + Reason renders more easily on a client than a raw HTTP
-// error, same reasoning as registrationlinks.PublicInfoResponse.
-type PublicInfoResponse struct {
-	InviterName string `json:"inviter_name,omitempty"`
-	Usable      bool   `json:"usable"`
-	Reason      string `json:"reason,omitempty"`
-}
-
-// RegisterRequest is for someone with NO account yet accepting an invite --
-// creates the account then links it. Someone who already has an account
-// instead calls the authenticated accept endpoint with no body.
-type RegisterRequest struct {
-	Name     string `json:"name,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
+// AcceptRequest is POST /private/parent-invites/accept's body --
+// authenticated, rate-limited (see module.go).
+type AcceptRequest struct {
+	Pin string `json:"pin,omitempty"`
 }
 
 // AcceptResponse reports which children actually got linked -- a child

@@ -64,7 +64,7 @@ func PinMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // PinParentChannelMessage handles POST /private/chats/parent-channels/messages/pin -- the org-less
-// counterpart: any member of the parent-to-parent channel may pin/unpin.
+// counterpart: needs the pin permission (admins and moderators have it; the admin can grant it to others).
 func PinParentChannelMessage(w http.ResponseWriter, r *http.Request) {
 	var (
 		request chatspg.MessagePinRequest
@@ -96,13 +96,16 @@ func PinParentChannelMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isMember, err := chats.IsChannelMember(ctx, message.ChannelId, accountId)
+	if !requireMember(w, r, message.ChannelId, accountId) {
+		return
+	}
+	canPin, err := chats.HasChannelPermission(ctx, message.ChannelId, accountId, chatspg.PermPin)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !isMember {
-		http.Error(w, "caller is not a member of this channel", http.StatusForbidden)
+	if !canPin {
+		http.Error(w, chats.ErrNoPermission.Error(), http.StatusForbidden)
 		return
 	}
 

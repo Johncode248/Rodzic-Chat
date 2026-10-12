@@ -83,3 +83,18 @@ func GetDetail(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(res)
 }
+
+// ListMine handles GET /private/caregivers/my -- every profile the caller owns with its review status.
+func ListMine(w http.ResponseWriter, r *http.Request) {
+	accountId, err := credentials.GetUserIdFromContext(r.Context())
+	if err != nil || accountId == "" {
+		http.Error(w, "Error getting accountId from context", http.StatusForbidden)
+		return
+	}
+	res, err := caregivers.ListMine(r.Context(), accountId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(res)
+}

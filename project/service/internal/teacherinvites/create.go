@@ -5,10 +5,16 @@ import (
 
 	databasepg "github.com/Johncode248/Rodzic-Chat/database/common"
 	"github.com/Johncode248/Rodzic-Chat/database/gormdb"
+	"github.com/Johncode248/Rodzic-Chat/library/pinhash"
+	"github.com/Johncode248/Rodzic-Chat/library/random"
 	"github.com/Johncode248/Rodzic-Chat/library/routines"
 	"github.com/Johncode248/Rodzic-Chat/logger"
 	teacherinvitespg "github.com/Johncode248/Rodzic-Chat/project/common/teacherinvites"
 )
+
+// maxPinGenerationAttempts bounds retrying GeneratePin on the rare
+// uniqueIndex collision on pin_hash.
+const maxPinGenerationAttempts = 5
 
 func Create(ctx context.Context, argument teacherinvitespg.CreateArgument) (res teacherinvitespg.CreateResponse, err error) {
 	ctx = logger.Enter(ctx, "teacherinvites.Create", argument)
@@ -36,12 +42,23 @@ func Create(ctx context.Context, argument teacherinvitespg.CreateArgument) (res 
 		}
 	}()
 
-	if err = FinalizeCreateMutation(ctx, usesMutation); err != nil {
-		return res, err
+	var plaintextPin string
+	for attempt := 0; ; attempt++ {
+		plaintextPin = random.GeneratePin()
+		usesMutation.Transient.Future.PinHash = pinhash.HashPin(plaintextPin)
+
+		err = FinalizeCreateMutation(ctx, usesMutation)
+		if err == nil {
+			break
+		}
+		if !pinhash.IsUniqueViolation(err) || attempt >= maxPinGenerationAttempts-1 {
+			return res, err
+		}
 	}
 
 	return teacherinvitespg.CreateResponse{
 		TeacherInvite: usesMutation.Transient.Current,
+		Pin:           plaintextPin,
 	}, nil
 }
 

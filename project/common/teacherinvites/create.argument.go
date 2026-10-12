@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/Johncode248/Rodzic-Chat/library/expressions"
-	"github.com/Johncode248/Rodzic-Chat/library/random"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
-const inviteValidity = 30 * 24 * time.Hour
+const inviteValidity = 72 * time.Hour
 
 type CreateArgument struct {
 	Id             string `json:"id,omitempty"`
@@ -19,10 +18,12 @@ type CreateArgument struct {
 	GroupId        string `json:"group_id,omitempty"`
 	// AccountType is "teacher" (default when empty) or "co_director" --
 	// enforced by Validate() below.
-	AccountType string `json:"account_type,omitempty" validate:"omitempty,oneof=teacher co_director"`
-	Name        string `json:"name,omitempty" validate:"omitempty,max=128"`
-	Email       string `json:"email,omitempty" validate:"omitempty,email,max=128"`
-	CreatedBy   string `json:"created_by,omitempty" validate:"required"`
+	AccountType       string `json:"account_type,omitempty" validate:"omitempty,oneof=teacher co_director"`
+	Name              string `json:"name,omitempty" validate:"omitempty,max=128"`
+	Email             string `json:"email,omitempty" validate:"omitempty,email,max=128"`
+	PublicDescription string `json:"public_description,omitempty" validate:"omitempty,max=256"`
+	InternalNote      string `json:"internal_note,omitempty" validate:"omitempty,max=1024"`
+	CreatedBy         string `json:"created_by,omitempty" validate:"required"`
 }
 
 func (a CreateArgument) Validate() error {
@@ -41,14 +42,18 @@ func (a CreateArgument) Populate() (invite TeacherInvite) {
 	invite.Id = expressions.Select(a.Id != "", a.Id, uuid.NewString())
 	invite.OrganizationId = a.OrganizationId
 	invite.GroupId = a.GroupId
-	invite.Token = random.GenerateToken()
 	invite.AccountType = expressions.Select(a.AccountType != "", a.AccountType, "teacher")
 	invite.Name = a.Name
 	invite.Email = a.Email
+	invite.PublicDescription = a.PublicDescription
+	invite.InternalNote = a.InternalNote
 	invite.CreatedBy = a.CreatedBy
 	invite.ExpiresAt = time.Now().Add(inviteValidity)
 	invite.CreateTime = time.Now()
 	invite.UpdateTime = time.Now()
+
+	// PinHash is set by the caller (see teacherinvites.Create) after
+	// generating and hashing a fresh plaintext PIN.
 
 	return invite
 }

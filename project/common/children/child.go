@@ -26,9 +26,14 @@ type Child struct {
 	// GET /private/children/mine/pesel to decrypt and see the real value
 	// (the "eye icon" flow), which is also the only place this ever gets
 	// decrypted.
-	EncryptedPesel string    `json:"-"`
-	CreateTime     time.Time `json:"create_time,omitempty" gorm:"not null"`
-	UpdateTime     time.Time `json:"update_time,omitempty" gorm:"not null"`
+	EncryptedPesel string `json:"-"`
+	// BloodType and HealthNote are the child's health card header (see project/common/childhealth), stored on the child
+	// itself because the card is strictly 1:1 with it. Never serialized with the child: only the health endpoints, which
+	// are limited to the child's linked parents, expose them.
+	BloodType  string    `json:"-"`
+	HealthNote string    `json:"-"`
+	CreateTime time.Time `json:"create_time,omitempty" gorm:"not null"`
+	UpdateTime time.Time `json:"update_time,omitempty" gorm:"not null"`
 	// HasPesel is computed (never stored) so clients can tell "no PESEL on file yet" apart from
 	// "there is one, still masked" without decrypting anything -- set by whichever internal
 	// function last touched EncryptedPesel (see ProcessSelectMutation, children.UpdateMine).
